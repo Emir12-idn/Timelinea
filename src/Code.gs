@@ -13,6 +13,7 @@ function onOpen() {
     .addItem('Add Task Row', 'addTaskRow')
     .addItem('Add Task Sejajar (level sama, di bawah baris terpilih)', 'addSiblingRow')
     .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
+    .addItem('Pilih Assigned To (Multi-pilih)', 'openAssignDialog')
     .addItem('Add Resource Row', 'addResourceRow')
     .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
     .addItem('Setup / Reset Settings Sheet', 'addSettingsSheet')
@@ -91,8 +92,9 @@ function showAbout() {
     'Timelinea > Add Task Sejajar menambah baris baru SETARA (level sama) di bawah baris yang dipilih; ' +
     'Timelinea > Add Sub-task menambah baris satu level LEBIH DALAM (anak) dari baris yang dipilih.\n' +
     'Task yang punya subtask otomatis jadi "summary": Start/Finish/% Complete/Cost-nya dirangkum dari anak-anaknya.\n' +
-    'Kolom "Assigned To" menerima beberapa nama sekaligus (pisah koma, mis. "Subur, Ade") yang dicocokkan ke\n' +
-    'sheet "Resources" — gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sana.\n' +
+    'Kolom "Assigned To" punya dropdown (klik sel, pilih 1 nama) dari sheet "Resources". Untuk pilih beberapa\n' +
+    'orang sekaligus di satu task, pilih dulu barisnya lalu Timelinea > Pilih Assigned To (Multi-pilih) — tinggal\n' +
+    'centang. Gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sheet Resources.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
     'Kolom Start/Finish/Planned Cost/Actual Cost/Critical/Slack dihitung otomatis dan akan selalu ditimpa\n' +
@@ -508,6 +510,65 @@ function applyAssignedToDropdown_(ss) {
   var nameRange = resourcesSheet.getRange(2, RESOURCES_COL.NAME, 500, 1);
   tasksSheet.getRange(2, COL.RESOURCE, 500, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInRange(nameRange, true).setAllowInvalid(true).build());
+}
+
+/**
+ * Opens a checkbox picker for Assigned To on the currently selected Tasks
+ * row — the dropdown from applyAssignedToDropdown_ only picks one name at a
+ * time (a single Sheets dropdown cell can't select multiple values), so
+ * assigning several people to one task still meant typing a comma-separated
+ * list by hand. This dialog lists every name in Resources as a checkbox,
+ * pre-checks whichever are already in the cell, and writes the comma-joined
+ * result back on Simpan.
+ */
+function openAssignDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tasksSheet = ss.getSheetByName(TASKS_SHEET);
+  if (!tasksSheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
+  if (ss.getActiveSheet().getName() !== TASKS_SHEET) {
+    ui.alert('Pilih dulu baris task di sheet Tasks, lalu jalankan menu ini lagi.');
+    return;
+  }
+  var row = ss.getActiveRange().getRow();
+  if (row < 2) {
+    ui.alert('Pilih dulu baris task (bukan baris judul) di sheet Tasks.');
+    return;
+  }
+
+  var resourcesSheet = ss.getSheetByName(RESOURCES_SHEET);
+  var names = [];
+  if (resourcesSheet) {
+    var lastRow = resourcesSheet.getLastRow();
+    if (lastRow >= 2) {
+      names = resourcesSheet.getRange(2, RESOURCES_COL.NAME, lastRow - 1, 1).getValues()
+        .map(function (r) { return String(r[0]).trim(); })
+        .filter(function (n) { return n.length > 0; });
+    }
+  }
+  if (names.length === 0) {
+    ui.alert('Belum ada nama di sheet Resources. Tambahkan dulu lewat Timelinea > Add Resource Row.');
+    return;
+  }
+
+  var currentRaw = tasksSheet.getRange(row, COL.RESOURCE).getValue();
+  var selected = parseAssignees_(currentRaw).map(function (n) { return n.toLowerCase(); });
+
+  var template = HtmlService.createTemplateFromFile('AssignDialog');
+  template.names = names;
+  template.selected = selected;
+  template.row = row;
+  template.taskName = String(tasksSheet.getRange(row, COL.NAME).getValue() || '(tanpa nama)');
+  var html = template.evaluate().setWidth(360).setHeight(420);
+  ui.showModalDialog(html, 'Pilih Assigned To');
+}
+
+/** Called from AssignDialog.html via google.script.run. */
+function saveAssignedTo(row, namesJoined) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  if (!sheet) return;
+  sheet.getRange(row, COL.RESOURCE).setValue(namesJoined);
+  refreshAfterRowInsert_(); // a script-driven .setValue() doesn't re-fire onEdit on its own
 }
 
 var AUTO_COL_PROTECTION_DESC_ = 'Timelinea: kolom otomatis (dihitung ulang tiap Recalculate)';
