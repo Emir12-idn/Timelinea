@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; margin: 10px; color: #000; }
+  #list { max-height: 220px; overflow-y: auto; border: 1px solid #ccc; padding: 4px; margin-bottom: 10px; }
+  #list div { padding: 5px 6px; cursor: pointer; }
+  #list div:hover { background: #f0f0f0; }
+  .arc-table { border-collapse: collapse; width: 100%; margin-bottom: 16px; font-size: 11px; }
+  .arc-table th, .arc-table td { border: 1px solid #999; padding: 3px 5px; text-align: left; }
+  button { margin-right: 8px; margin-bottom: 10px; }
+  @media print { #list, #toolbar { display: none; } }
+</style>
+</head>
+<body>
+  <div id="listView">
+    <p>Pilih project yang mau dilihat (read-only, tidak bisa diedit/disimpan ulang):</p>
+    <div id="list">Memuat daftar arsip...</div>
+  </div>
+  <div id="contentView" style="display:none;">
+    <div id="toolbar">
+      <button onclick="goBack()">&larr; Kembali ke daftar</button>
+      <button onclick="window.print()">Print / Simpan sebagai PDF</button>
+    </div>
+    <div id="content"></div>
+  </div>
+<script>
+  function renderList(items) {
+    var el = document.getElementById('list');
+    if (!items.length) { el.innerHTML = '<i>Belum ada arsip project.</i>'; return; }
+    el.innerHTML = '';
+    items.forEach(function (it) {
+      var row = document.createElement('div');
+      row.textContent = it.name + '  (' + it.date + ')';
+      row.onclick = function () { openItem(it.id); };
+      el.appendChild(row);
+    });
+  }
+  function openItem(id) {
+    document.getElementById('content').innerHTML = 'Membuka...';
+    document.getElementById('listView').style.display = 'none';
+    document.getElementById('contentView').style.display = 'block';
+    google.script.run.withSuccessHandler(function (html) {
+      document.getElementById('content').innerHTML = html;
+    }).withFailureHandler(function (err) {
+      document.getElementById('content').innerHTML = '<p>Gagal membuka arsip: ' + err.message + '</p>';
+    }).getArchiveHtml(id);
+  }
+  function goBack() {
+    document.getElementById('contentView').style.display = 'none';
+    document.getElementById('listView').style.display = 'block';
+  }
+  google.script.run.withSuccessHandler(renderList).listArchives();
+</script>
+</body>
+</html>

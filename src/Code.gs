@@ -18,6 +18,9 @@ function onOpen() {
     .addItem('Recalculate Schedule', 'runCalculateSchedule')
     .addItem('Refresh Gantt Chart', 'runDrawGanttChart')
     .addSeparator()
+    .addItem('Mulai Project Baru (Arsipkan yang Lama)', 'startNewProject')
+    .addItem('Lihat Arsip Project', 'openArchiveViewer')
+    .addSeparator()
     .addItem('About Timelinea', 'showAbout')
     .addToUi();
 }
@@ -49,7 +52,10 @@ function showAbout() {
     'Kolom "Assigned To" menerima beberapa nama sekaligus (pisah koma, mis. "Subur, Ade") yang dicocokkan ke\n' +
     'sheet "Resources" — gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sana.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
-    'atau lewat menu Timelinea > Recalculate / Refresh.',
+    'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
+    'Selesai satu project? Pakai Timelinea > Mulai Project Baru untuk mengarsipkan (mengunci) data lama\n' +
+    'dan mengosongkan Tasks untuk project berikutnya — tanpa perlu bikin Sheet baru. Arsip lama tetap bisa\n' +
+    'dilihat & diprint lewat Timelinea > Lihat Arsip Project, tapi tidak bisa diedit lagi.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
