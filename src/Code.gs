@@ -24,6 +24,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
     .addItem('Setup / Reset Settings Sheet', 'addSettingsSheet')
+    .addItem('Setup / Reset Pembelian Bahan Sheet', 'addPurchasesSheet')
     .addItem('Setup / Reset Issues Sheet (HAPUS riwayat masalah)', 'addIssuesSheet')
     .addSeparator()
     .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings')
@@ -35,6 +36,8 @@ function onOpen() {
     .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
     .addItem('Pilih Assigned To (Multi-pilih)', 'openAssignDialog')
     .addItem('Add Resource Row', 'addResourceRow')
+    .addSeparator()
+    .addItem('Tambah Pembelian Bahan', 'addPurchaseRow')
     .addSeparator()
     .addItem('Catat Masalah (Issue Log)', 'logIssue')
     .addSeparator()
@@ -130,9 +133,9 @@ function showAbout() {
     'Timelinea > Add Task Sejajar menambah baris baru SETARA (level sama) di bawah baris yang dipilih; ' +
     'Timelinea > Add Sub-task menambah baris satu level LEBIH DALAM (anak) dari baris yang dipilih.\n' +
     'Task yang punya subtask otomatis jadi "summary": Start/Finish/% Complete/Cost-nya dirangkum dari anak-anaknya.\n' +
-    'Kolom "Assigned To" punya dropdown (klik sel, pilih 1 nama) dari sheet "Resources". Untuk pilih beberapa\n' +
-    'orang sekaligus di satu task, pilih dulu barisnya lalu Timelinea > Pilih Assigned To (Multi-pilih) — tinggal\n' +
-    'centang. Gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sheet Resources.\n' +
+    'Untuk isi "Assigned To" (bisa lebih dari satu orang per task), pilih baris task-nya lalu klik "👤" di kolom\n' +
+    '"+ / ↓ / -" (atau lewat Timelinea > Pilih Assigned To) — muncul pop-up centang nama dari sheet "Resources".\n' +
+    'Gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sheet Resources.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
     'Tidak perlu buka menu Timelinea tiap mau tambah/hapus baris — klik sel di kolom "+ / ↓ / -" (tepat di\n' +
@@ -195,6 +198,7 @@ function initializeTimelineaHeadless() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   setupSettingsSheet_(ss);
   setupResourcesSheet_(ss);
+  setupPurchasesSheet_(ss);
   if (!ss.getSheetByName(ISSUES_SHEET)) setupIssuesSheet_(ss); // preserved across re-Initialize; see setupIssuesSheet_
   setupTasksSheet_(ss);
   drawGanttChart();
@@ -305,7 +309,6 @@ function addResourcesSheet() {
     if (response !== ui.Button.YES) return;
   }
   setupResourcesSheet_(ss);
-  applyAssignedToDropdown_(ss); // Resources sheet was just recreated, so re-point the Tasks dropdown at it
   runCalculateSchedule();
 }
 
@@ -397,6 +400,116 @@ function addIssuesSheet() {
     if (response !== ui.Button.YES) return;
   }
   setupIssuesSheet_(ss);
+}
+
+/**
+ * Pembelian Bahan (materials/goods purchases) — a task like "Beli Bahan
+ * Besi/Baja" is usually several different items bought at once, not one
+ * flat Cost/Day number. Total is a live formula (Qty × Harga Satuan), safe
+ * across locales since it's plain arithmetic, no function name involved.
+ */
+function setupPurchasesSheet_(ss) {
+  var sheet = ss.getSheetByName(PURCHASES_SHEET);
+  if (sheet) ss.deleteSheet(sheet);
+  sheet = ss.insertSheet(PURCHASES_SHEET);
+
+  sheet.getRange(1, 1, 1, PURCHASES_HEADER.length).setValues([PURCHASES_HEADER])
+    .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 28);
+  sheet.setFrozenRows(1);
+
+  sheet.getRange(2, PURCHASES_COL.QTY, 500, 1).setNumberFormat('0.##');
+  sheet.getRange(2, PURCHASES_COL.UNIT_PRICE, 500, 1).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(2, PURCHASES_COL.TOTAL, 500, 1).setNumberFormat('"Rp"#,##0');
+
+  var widths = [40, 65, 200, 200, 60, 90, 110, 110];
+  widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  var dataRange = sheet.getRange(2, 1, 498, PURCHASES_HEADER.length);
+  sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=ISEVEN(ROW())')
+      .setBackground(COLOR.ZEBRA_ROW_BG)
+      .setRanges([dataRange])
+      .build()
+  ]);
+}
+
+/** Creates (or resets) just the Purchases sheet, without touching Tasks/Settings/Resources/Issues. */
+function addPurchasesSheet() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(PURCHASES_SHEET)) {
+    var response = ui.alert(
+      'Setup Pembelian Bahan Sheet',
+      'Sheet "Pembelian Bahan" sudah ada. Ini akan MENGHAPUS semua catatan pembelian yang sudah ada di sana. Lanjutkan?',
+      ui.ButtonSet.YES_NO);
+    if (response !== ui.Button.YES) return;
+  }
+  setupPurchasesSheet_(ss);
+  runCalculateSchedule();
+}
+
+function nextPurchaseId_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var ids = lastRow >= 2
+    ? sheet.getRange(2, PURCHASES_COL.ID, lastRow - 1, 1).getValues().flat().filter(function (v) { return v !== ''; })
+    : [];
+  return ids.length ? Math.max.apply(null, ids) + 1 : 1;
+}
+
+/**
+ * Logs a new material/goods purchase against a task — Qty/Satuan/Harga
+ * Satuan are filled in later directly in the sheet (usually not known yet
+ * at the moment of logging what's being bought). If a Tasks row is
+ * selected when this runs, Task ID/Name are pre-filled automatically.
+ * Rolls into that task's Planned/Actual Cost — see readPurchaseTotals_.
+ */
+function addPurchaseRow() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var purchasesSheet = ss.getSheetByName(PURCHASES_SHEET);
+  if (!purchasesSheet) {
+    ui.alert('Jalankan Timelinea > Reset & Setup > Setup / Reset Pembelian Bahan Sheet dulu.');
+    return;
+  }
+
+  var taskId = '', taskName = '';
+  var activeSheet = ss.getActiveSheet();
+  if (activeSheet.getName() === TASKS_SHEET) {
+    var activeRow = ss.getActiveRange().getRow();
+    if (activeRow >= 2) {
+      taskId = activeSheet.getRange(activeRow, COL.ID).getValue();
+      taskName = activeSheet.getRange(activeRow, COL.NAME).getValue();
+    }
+  }
+
+  var resp = ui.prompt(
+    'Tambah Pembelian Bahan' + (taskName ? ' — ' + taskName : ''),
+    'Nama bahan/barang yang dibeli (Qty, Satuan, dan Harga Satuan bisa dilengkapi langsung di sheet setelah ini):',
+    ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  var item = resp.getResponseText().trim();
+  if (!item) return;
+
+  var newRow = purchasesSheet.getLastRow() + 1;
+  purchasesSheet.getRange(newRow, PURCHASES_COL.ID).setValue(nextPurchaseId_(purchasesSheet));
+  purchasesSheet.getRange(newRow, PURCHASES_COL.TASK_ID).setValue(taskId);
+  purchasesSheet.getRange(newRow, PURCHASES_COL.TASK_NAME).setValue(taskName);
+  purchasesSheet.getRange(newRow, PURCHASES_COL.ITEM).setValue(item);
+  purchasesSheet.getRange(newRow, PURCHASES_COL.QTY).setValue(1).setNumberFormat('0.##');
+  purchasesSheet.getRange(newRow, PURCHASES_COL.UNIT_PRICE).setNumberFormat('"Rp"#,##0');
+  purchasesSheet.getRange(newRow, PURCHASES_COL.TOTAL).setNumberFormat('"Rp"#,##0')
+    .setFormula('=' + colLetter_(PURCHASES_COL.QTY) + newRow + '*' + colLetter_(PURCHASES_COL.UNIT_PRICE) + newRow);
+
+  ss.setActiveSheet(purchasesSheet);
+  purchasesSheet.setActiveSelection(purchasesSheet.getRange(newRow, PURCHASES_COL.UNIT));
+
+  try { calculateSchedule(); } catch (err) { /* the purchase is logged either way; cost rollup just won't show yet */ }
+
+  ui.alert('Pembelian dicatat' + (taskName ? ' untuk task "' + taskName + '"' : '') +
+    '. Lengkapi Qty, Satuan, dan Harga Satuan di sheet Pembelian Bahan — totalnya otomatis masuk ke Planned Cost task itu.');
 }
 
 function nextIssueId_(sheet) {
@@ -549,7 +662,6 @@ function setupTasksSheet_(ss) {
   ]);
 
   applyAutoColumnWarnings_(sheet);
-  applyAssignedToDropdown_(ss);
   applyRowActionColumn_(sheet);
 
   // Cost/Day, Planned Cost, Actual Cost hidden from the start, not just on
@@ -567,11 +679,15 @@ function setupTasksSheet_(ss) {
  * Task Name and frozen (see FROZEN_COLS), not at the far end of the sheet:
  * putting it past every other column meant scrolling across the whole sheet
  * just to reach it, which defeated the point of a quick per-row control. A
- * dropdown, not checkboxes, since it needs three distinct actions in one
+ * dropdown, not checkboxes, since it needs four distinct actions in one
  * column: + (sibling, same level), ↓ (subtask, one level deeper), - (delete,
- * with confirmation). Values are bare symbols, not words, so the column
- * stays narrow — see handleRowAction_ (wired from onEdit) for what each one
- * does. setAllowInvalid(true) so it doesn't hard-block whatever a user types.
+ * with confirmation), 👤 (opens the Assigned To picker — the only mechanism
+ * for that field; a native per-cell dropdown used to also exist but could
+ * only pick one name while the picker supports several, so having both was
+ * two ways to do the same thing). Values are bare symbols, not words, so
+ * the column stays narrow — see handleRowAction_ (wired from onEdit) for
+ * what each one does. setAllowInvalid(true) so it doesn't hard-block
+ * whatever a user types.
  */
 function applyRowActionColumn_(sheet) {
   sheet.getRange(1, ROW_ACTION_COL).setValue('+ / ↓ / -')
@@ -579,7 +695,8 @@ function applyRowActionColumn_(sheet) {
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   sheet.setColumnWidth(ROW_ACTION_COL, 50);
   sheet.getRange(2, ROW_ACTION_COL, 498, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE], true)
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE, ROW_ACTION_ASSIGN], true)
       .setAllowInvalid(true).build())
     .setHorizontalAlignment('center');
 }
@@ -601,50 +718,21 @@ function refreshRowActionColumn() {
 }
 
 /**
- * Assigned To dropdown, sourced live from the Resources Name column instead
- * of a fixed list — so adding a new person to Resources immediately shows
- * up as a choice here with no extra step. setAllowInvalid(true) on purpose:
- * Assigned To supports multiple comma-separated names on one task (e.g.
- * "Subur, Ade"), which can't be a single dropdown selection, so typing is
- * still allowed for that case — this just makes the common single-assignee
- * case a click instead of retyping a name (and retyping is exactly what
- * causes the silent "name not found in Resources" cost bug from a typo).
- * Re-applied whenever Resources is rebuilt (Setup / Reset Resources Sheet
- * deletes and recreates that sheet, which would otherwise leave this
- * dropdown pointing at a range that no longer exists).
+ * Opens a checkbox picker for Assigned To on the given Tasks row. This is
+ * the ONE mechanism for setting Assigned To — there used to also be a
+ * native Sheets dropdown on the cell itself, but that could only pick one
+ * name at a time while this dialog supports several, so having both was
+ * two different ways to do the same thing for no reason; the dropdown was
+ * removed. Reachable via the "👤" option in the +/↓/- row-action column, or
+ * the Timelinea > Pilih Assigned To menu item for anyone who prefers that.
+ * Lists every name in Resources as a checkbox, pre-checks whichever are
+ * already in the cell, and writes the comma-joined result back on Simpan.
  */
-function applyAssignedToDropdown_(ss) {
-  var tasksSheet = ss.getSheetByName(TASKS_SHEET);
-  var resourcesSheet = ss.getSheetByName(RESOURCES_SHEET);
-  if (!tasksSheet || !resourcesSheet) return;
-  var nameRange = resourcesSheet.getRange(2, RESOURCES_COL.NAME, 500, 1);
-  tasksSheet.getRange(2, COL.RESOURCE, 500, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInRange(nameRange, true).setAllowInvalid(true).build());
-}
-
-/**
- * Opens a checkbox picker for Assigned To on the currently selected Tasks
- * row — the dropdown from applyAssignedToDropdown_ only picks one name at a
- * time (a single Sheets dropdown cell can't select multiple values), so
- * assigning several people to one task still meant typing a comma-separated
- * list by hand. This dialog lists every name in Resources as a checkbox,
- * pre-checks whichever are already in the cell, and writes the comma-joined
- * result back on Simpan.
- */
-function openAssignDialog() {
+function openAssignDialogForRow_(row) {
   var ui = SpreadsheetApp.getUi();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tasksSheet = ss.getSheetByName(TASKS_SHEET);
   if (!tasksSheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
-  if (ss.getActiveSheet().getName() !== TASKS_SHEET) {
-    ui.alert('Pilih dulu baris task di sheet Tasks, lalu jalankan menu ini lagi.');
-    return;
-  }
-  var row = ss.getActiveRange().getRow();
-  if (row < 2) {
-    ui.alert('Pilih dulu baris task (bukan baris judul) di sheet Tasks.');
-    return;
-  }
 
   var resourcesSheet = ss.getSheetByName(RESOURCES_SHEET);
   var names = [];
@@ -671,6 +759,22 @@ function openAssignDialog() {
   template.taskName = String(tasksSheet.getRange(row, COL.NAME).getValue() || '(tanpa nama)');
   var html = template.evaluate().setWidth(360).setHeight(420);
   ui.showModalDialog(html, 'Pilih Assigned To');
+}
+
+function openAssignDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss.getSheetByName(TASKS_SHEET)) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
+  if (ss.getActiveSheet().getName() !== TASKS_SHEET) {
+    ui.alert('Pilih dulu baris task di sheet Tasks, lalu jalankan menu ini lagi.');
+    return;
+  }
+  var row = ss.getActiveRange().getRow();
+  if (row < 2) {
+    ui.alert('Pilih dulu baris task (bukan baris judul) di sheet Tasks.');
+    return;
+  }
+  openAssignDialogForRow_(row);
 }
 
 /** Called from AssignDialog.html via google.script.run. */
@@ -777,7 +881,8 @@ function formatNewTaskRow_(sheet, row) {
   sheet.getRange(row, COL.VARIANCE).setNumberFormat('+0;-0;0');
   sheet.getRange(row, COL.HAS_ISSUE).insertCheckboxes().setValue(false);
   sheet.getRange(row, ROW_ACTION_COL).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE], true)
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE, ROW_ACTION_ASSIGN], true)
       .setAllowInvalid(true).build());
 }
 
@@ -839,17 +944,16 @@ function addSiblingRow() {
 }
 
 /**
- * Handles an edit to the ROW_ACTION_COL cell (the "+/subtask/-" column
- * reusing the old Gantt spacer column) — reported request: something closer
- * to MS Project's inline add/delete instead of always going through the
- * menu, with three distinct, simple choices: "+ Tambah sejajar" inserts a
- * same-level sibling right below (mirrors addSiblingRow), "↓ Tambah
- * subtask" inserts a child one level deeper (mirrors addSubtaskRow), and
- * "- Hapus baris" deletes the row after a confirmation, since that's
- * irreversible and this column is exactly the kind of thing an unfamiliar
- * user could tap by accident. If the confirmation dialog can't be shown for
- * any reason, the row is NOT deleted — never delete data without being sure
- * the user actually confirmed.
+ * Handles an edit to the ROW_ACTION_COL cell (the "+/↓/-/👤" column next to
+ * Task Name) — inline row actions instead of always going through the
+ * menu: "+" inserts a same-level sibling right below (mirrors
+ * addSiblingRow), "↓" inserts a child one level deeper (mirrors
+ * addSubtaskRow), "👤" opens the Assigned To picker for that row, and "-"
+ * deletes the row after a confirmation, since that's irreversible and this
+ * column is exactly the kind of thing an unfamiliar user could tap by
+ * accident. If the confirmation dialog can't be shown for any reason, the
+ * row is NOT deleted — never delete data without being sure the user
+ * actually confirmed.
  */
 function handleRowAction_(range) {
   var sheet = range.getSheet();
@@ -865,6 +969,12 @@ function handleRowAction_(range) {
   if (value === ROW_ACTION_SUBTASK) {
     range.setValue('');
     insertSubtaskRowAt_(sheet, row);
+    return;
+  }
+
+  if (value === ROW_ACTION_ASSIGN) {
+    range.setValue('');
+    openAssignDialogForRow_(row);
     return;
   }
 
@@ -897,7 +1007,7 @@ function handleRowAction_(range) {
     return;
   }
 
-  range.setValue(''); // any stray value that isn't one of the three options
+  range.setValue(''); // any stray value that isn't one of the four options
 }
 
 /** Shared by addSubtaskRow() (menu) and handleRowAction_() (the +/- column). */
