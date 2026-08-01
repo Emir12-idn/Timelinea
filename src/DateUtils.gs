@@ -57,6 +57,14 @@ function workdaysBetween_(a, b, skipWeekends, holidaySet) {
   return count;
 }
 
+/** Signed working-day distance from a to b: positive if b is after a, negative if before, 0 if equal. */
+function signedWorkdaysBetween_(a, b, skipWeekends, holidaySet) {
+  if (b.getTime() === a.getTime()) return 0;
+  return b.getTime() > a.getTime()
+    ? workdaysBetween_(a, b, skipWeekends, holidaySet)
+    : -workdaysBetween_(b, a, skipWeekends, holidaySet);
+}
+
 /** Enumerates every calendar date from start to end (inclusive). */
 function enumerateDays_(start, end) {
   var days = [];

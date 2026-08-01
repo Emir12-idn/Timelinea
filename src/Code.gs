@@ -18,6 +18,8 @@ function onOpen() {
     .addItem('Recalculate Schedule', 'runCalculateSchedule')
     .addItem('Refresh Gantt Chart', 'runDrawGanttChart')
     .addSeparator()
+    .addItem('Set Baseline (Simpan Rencana Awal)', 'setBaseline')
+    .addSeparator()
     .addItem('Mulai Project Baru (Arsipkan yang Lama)', 'startNewProject')
     .addItem('Lihat Arsip Project', 'openArchiveViewer')
     .addSeparator()
@@ -55,7 +57,9 @@ function showAbout() {
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
     'Selesai satu project? Pakai Timelinea > Mulai Project Baru untuk mengarsipkan (mengunci) data lama\n' +
     'dan mengosongkan Tasks untuk project berikutnya — tanpa perlu bikin Sheet baru. Arsip lama tetap bisa\n' +
-    'dilihat & diprint lewat Timelinea > Lihat Arsip Project, tapi tidak bisa diedit lagi.',
+    'dilihat & diprint lewat Timelinea > Lihat Arsip Project, tapi tidak bisa diedit lagi.\n' +
+    'Pakai Timelinea > Set Baseline untuk menyimpan Start/Finish saat ini sebagai rencana awal — kolom\n' +
+    'Variance akan menunjukkan berapa hari project melenceng (lebih/kurang) dari rencana itu.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -199,16 +203,16 @@ function setupTasksSheet_(ss) {
   // Resources entry — their Planned Cost comes from that resource's
   // Rate/Day instead, so the two don't double up.
   var sample = [
-    [1, 'Project Kickoff', 0, 0, '', '', '', 0, '', 0, '', '', true, '', ''],
-    [2, 'Phase 1: Discovery', 0, '', '', '', '', '', '', '', '', '', false, '', ''],
-    [3, 'Requirements Gathering', 1, 3, '', '', '1FS', 0, 'Analyst', 0, '', '', false, '', ''],
-    [4, 'Design', 1, 5, '', '', '3FS', 0, 'Designer', 0, '', '', false, '', ''],
-    [5, 'Phase 2: Build & Test', 0, '', '', '', '', '', '', '', '', '', false, '', ''],
-    [6, 'Development', 1, '', '', '', '', '', '', '', '', '', false, '', ''],
-    [7, 'Backend', 2, 7, '', '', '4FS', 0, 'Backend Dev', 0, '', '', false, '', ''],
-    [8, 'Frontend', 2, 6, '', '', '4FS', 0, 'Frontend Dev', 0, '', '', false, '', ''],
-    [9, 'Testing', 1, 4, '', '', '7FS,8FS', 0, 'QA,PM', 0, '', '', false, '', ''],
-    [10, 'Launch', 0, 0, '', '', '9FS', 0, 'PM', 0, '', '', true, '', '']
+    [1, 'Project Kickoff', 0, 0, '', '', '', 0, '', 0, '', '', true, '', '', '', '', ''],
+    [2, 'Phase 1: Discovery', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', ''],
+    [3, 'Requirements Gathering', 1, 3, '', '', '1FS', 0, 'Analyst', 0, '', '', false, '', '', '', '', ''],
+    [4, 'Design', 1, 5, '', '', '3FS', 0, 'Designer', 0, '', '', false, '', '', '', '', ''],
+    [5, 'Phase 2: Build & Test', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', ''],
+    [6, 'Development', 1, '', '', '', '', '', '', '', '', '', false, '', '', '', '', ''],
+    [7, 'Backend', 2, 7, '', '', '4FS', 0, 'Backend Dev', 0, '', '', false, '', '', '', '', ''],
+    [8, 'Frontend', 2, 6, '', '', '4FS', 0, 'Frontend Dev', 0, '', '', false, '', '', '', '', ''],
+    [9, 'Testing', 1, 4, '', '', '7FS,8FS', 0, 'QA,PM', 0, '', '', false, '', '', '', '', ''],
+    [10, 'Launch', 0, 0, '', '', '9FS', 0, 'PM', 0, '', '', true, '', '', '', '', '']
   ];
   sheet.getRange(2, 1, sample.length, TASKS_HEADER.length).setValues(sample);
 
@@ -222,8 +226,11 @@ function setupTasksSheet_(ss) {
   sheet.getRange(2, COL.ACTUAL_COST, 500, 1).setNumberFormat('"Rp"#,##0');
   sheet.getRange(2, COL.MILESTONE, 500, 1).insertCheckboxes();
   sheet.getRange(2, COL.CRITICAL, 500, 1).insertCheckboxes();
+  sheet.getRange(2, COL.BASELINE_START, 500, 1).setNumberFormat('yyyy-MM-dd');
+  sheet.getRange(2, COL.BASELINE_FINISH, 500, 1).setNumberFormat('yyyy-MM-dd');
+  sheet.getRange(2, COL.VARIANCE, 500, 1).setNumberFormat('+0;-0;0');
 
-  var widths = [40, 220, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65];
+  var widths = [40, 220, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65, 95, 95, 75];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
   sheet.getRange(2, COL.PCT_COMPLETE, 500, 1).setDataValidation(
@@ -240,6 +247,7 @@ function setupTasksSheet_(ss) {
     .setBorder(null, null, null, true, null, null, COLOR.FROZEN_DIVIDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
   var dataRange = sheet.getRange(2, 1, 498, TASKS_LAST_COL);
+  var varianceRange = sheet.getRange(2, COL.VARIANCE, 498, 1);
   sheet.setConditionalFormatRules([
     SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=$' + colLetter_(COL.CRITICAL) + '2=TRUE')
@@ -250,8 +258,43 @@ function setupTasksSheet_(ss) {
       .whenFormulaSatisfied('=ISEVEN(ROW())')
       .setBackground(COLOR.ZEBRA_ROW_BG)
       .setRanges([dataRange])
+      .build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND(ISNUMBER($' + colLetter_(COL.VARIANCE) + '2), $' + colLetter_(COL.VARIANCE) + '2>0)')
+      .setBackground(COLOR.VARIANCE_LATE_BG).setFontColor(COLOR.VARIANCE_LATE_TEXT)
+      .setRanges([varianceRange])
       .build()
   ]);
+}
+
+/**
+ * Snapshots the current Start/Finish of every task into Baseline Start/
+ * Baseline Finish (the "rencana awal"). Baseline columns are never touched
+ * by calculateSchedule() afterward — only this explicit action changes
+ * them — so the Variance column can show real drift over time.
+ */
+function setBaseline() {
+  var ui = SpreadsheetApp.getUi();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  if (!sheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
+
+  var response = ui.alert(
+    'Set Baseline',
+    'Ini akan menyimpan Start/Finish yang sedang berjalan sekarang sebagai rencana awal (baseline) untuk ' +
+    'semua task, menimpa baseline sebelumnya kalau sudah pernah diset. Kolom Variance akan mulai menunjukkan ' +
+    'selisih dari titik ini. Lanjutkan?',
+    ui.ButtonSet.YES_NO);
+  if (response !== ui.Button.YES) return;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  var starts = sheet.getRange(2, COL.START, lastRow - 1, 1).getValues();
+  var finishes = sheet.getRange(2, COL.FINISH, lastRow - 1, 1).getValues();
+  sheet.getRange(2, COL.BASELINE_START, lastRow - 1, 1).setValues(starts);
+  sheet.getRange(2, COL.BASELINE_FINISH, lastRow - 1, 1).setValues(finishes);
+
+  runDrawGanttChart();
+  ui.alert('Baseline tersimpan. Kolom Variance sekarang menunjukkan selisih (hari kerja) dari rencana ini.');
 }
 
 function nextTaskId_(sheet) {
@@ -273,6 +316,18 @@ function formatNewTaskRow_(sheet, row) {
   sheet.getRange(row, COL.ACTUAL_COST).setNumberFormat('"Rp"#,##0');
   sheet.getRange(row, COL.MILESTONE).insertCheckboxes().setValue(false);
   sheet.getRange(row, COL.CRITICAL).insertCheckboxes();
+  sheet.getRange(row, COL.BASELINE_START).setNumberFormat('yyyy-MM-dd');
+  sheet.getRange(row, COL.BASELINE_FINISH).setNumberFormat('yyyy-MM-dd');
+  sheet.getRange(row, COL.VARIANCE).setNumberFormat('+0;-0;0');
+}
+
+/**
+ * Adding a row via the menu is a programmatic edit, so it does not re-fire
+ * onEdit on its own — without this, the new row silently wouldn't appear on
+ * the Gantt chart until some other edit happened to trigger a recalculation.
+ */
+function refreshAfterRowInsert_() {
+  try { drawGanttChart(); } catch (err) { /* leave it for the next successful edit/recalculate */ }
 }
 
 /** Appends a new top-level task row at the bottom, pre-filled with the next sequential ID. */
@@ -286,6 +341,7 @@ function addTaskRow() {
   sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
   formatNewTaskRow_(sheet, newRow);
   sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
+  refreshAfterRowInsert_();
 }
 
 /**
@@ -310,4 +366,5 @@ function addSubtaskRow() {
   formatNewTaskRow_(sheet, newRow);
   sheet.getRange(newRow, COL.LEVEL).setValue(parentLevel + 1);
   sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
+  refreshAfterRowInsert_();
 }

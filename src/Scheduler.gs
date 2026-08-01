@@ -77,7 +77,8 @@ function readTasks_(sheet) {
       pctComplete: Number(row[COL.PCT_COMPLETE - 1]) || 0,
       assignees: parseAssignees_(row[COL.RESOURCE - 1]),
       costRate: Number(row[COL.COST_RATE - 1]) || 0,
-      milestoneFlag: row[COL.MILESTONE - 1] === true
+      milestoneFlag: row[COL.MILESTONE - 1] === true,
+      baselineFinish: row[COL.BASELINE_FINISH - 1] instanceof Date ? stripTime_(row[COL.BASELINE_FINISH - 1]) : null
     });
   });
   return tasks;
@@ -360,6 +361,10 @@ function calculateSchedule() {
       sheet.getRange(t.row, COL.DURATION).setValue(t.duration);
       sheet.getRange(t.row, COL.PCT_COMPLETE).setValue(Math.round(t.pctComplete * 10) / 10);
     }
+    // Variance vs Baseline Finish (set via Timelinea > Set Baseline): positive
+    // = running late, negative = ahead of schedule. Blank until a baseline exists.
+    sheet.getRange(t.row, COL.VARIANCE).setValue(
+      t.baselineFinish ? signedWorkdaysBetween_(t.baselineFinish, t.finish, settings.skipWeekends, settings.holidaySet) : '');
   });
 
   updateResourceSheet_(ss, resourceRows, tasks);

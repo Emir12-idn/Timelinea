@@ -122,16 +122,19 @@ function drawGanttChart() {
   sheet.setRowHeight(1, 28);
   sheet.setColumnWidths(GANTT_START_COL, buckets.length, timeline.mode === 'day' ? 26 : 52);
 
-  // Light grid over the whole chart so bars read as a designed chart rather
-  // than raw color fills, plus a heavier rule separating header from data.
+  // Outer frame only (no per-cell interior gridlines — those are expensive
+  // to draw on a wide range and risked timing out the onEdit auto-refresh,
+  // which is what made the chart seem to "disappear" until a manual rerun).
   var fullChartRange = sheet.getRange(1, GANTT_START_COL, tasks.length + 1, buckets.length);
-  fullChartRange.setBorder(true, true, true, true, true, true, COLOR.GRID_LINE, SpreadsheetApp.BorderStyle.SOLID);
+  fullChartRange.setBorder(true, true, true, true, false, false, COLOR.GRID_LINE, SpreadsheetApp.BorderStyle.SOLID);
   headerRange.setBorder(null, null, true, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
   if (timeline.mode === 'day' && settings.skipWeekends) {
     buckets.forEach(function (b, colIdx) {
       if (isWeekend_(b.start)) {
-        sheet.getRange(1, GANTT_START_COL + colIdx, tasks.length + 1, 1).setBackground(COLOR.WEEKEND_BG);
+        // Data rows only — shading row 1 too would paint over the header's
+        // blue background, leaving its white date text unreadable.
+        sheet.getRange(2, GANTT_START_COL + colIdx, tasks.length, 1).setBackground(COLOR.WEEKEND_BG);
       }
     });
   }

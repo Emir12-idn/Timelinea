@@ -24,18 +24,22 @@ var COL = {
   ACTUAL_COST: 12,
   MILESTONE: 13,
   CRITICAL: 14,
-  SLACK: 15
+  SLACK: 15,
+  BASELINE_START: 16,
+  BASELINE_FINISH: 17,
+  VARIANCE: 18
 };
 
 var TASKS_HEADER = [
   'ID', 'Task Name', 'Level', 'Duration (d)', 'Start', 'Finish',
   'Predecessors', '% Complete', 'Assigned To', 'Cost/Day', 'Planned Cost',
-  'Actual Cost', 'Milestone', 'Critical', 'Slack (d)'
+  'Actual Cost', 'Milestone', 'Critical', 'Slack (d)',
+  'Baseline Start', 'Baseline Finish', 'Variance (d)'
 ];
 
-var TASKS_LAST_COL = 15;   // column O
+var TASKS_LAST_COL = 18;   // column R
 var FROZEN_COLS = 2;       // only ID + Task Name — leaves room for the Gantt chart on screen
-var GANTT_START_COL = 17;  // column Q (leaves column P as a spacer)
+var GANTT_START_COL = 20;  // column T (leaves column S as a spacer)
 
 // Resources sheet columns (1-indexed)
 var RESOURCES_COL = {
@@ -85,7 +89,9 @@ var COLOR = {
   TITLE_BAR_BG: '#1c4587',
   TITLE_BAR_TEXT: '#ffffff',
   GRID_LINE: '#d9d9d9',
-  FROZEN_DIVIDER: '#9aa5b1'
+  FROZEN_DIVIDER: '#9aa5b1',
+  VARIANCE_LATE_BG: '#fff2cc',
+  VARIANCE_LATE_TEXT: '#7f6000'
 };
 
 /** Converts a 1-indexed column number to its A1 letter (1 -> "A", 27 -> "AA"). */
