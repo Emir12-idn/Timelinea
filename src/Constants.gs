@@ -88,29 +88,6 @@ var RESOURCES_HEADER = [
   'Name', 'Rate/Day', 'Role', 'Assigned Tasks', 'Total Days Allocated', 'Total Pay'
 ];
 
-// Itemized material/goods purchases per task — e.g. a task like "Beli Bahan
-// Besi/Baja" often means several different items, not one flat Cost/Day
-// figure. Linked to Tasks by ID+Name (same collision-avoidance as Issues,
-// since Task IDs restart every "Mulai Project Baru"). Rolls into that
-// task's Planned/Actual Cost alongside labor cost and Cost/Day — see
-// readPurchaseTotals_ in Scheduler.gs. Reset with Tasks/Resources on a new
-// project (unlike Issues, which is a permanent lessons-learned log).
-var PURCHASES_SHEET = 'Pembelian Bahan';
-var PURCHASES_COL = {
-  ID: 1,
-  TASK_ID: 2,
-  TASK_NAME: 3,
-  ITEM: 4,
-  QTY: 5,
-  UNIT: 6,
-  UNIT_PRICE: 7,
-  TOTAL: 8
-};
-
-var PURCHASES_HEADER = [
-  'ID', 'Task ID', 'Task Name', 'Bahan/Barang', 'Qty', 'Satuan', 'Harga Satuan', 'Total'
-];
-
 var GANTT_MAX_DAYS = 400;                 // hard cap when rendering one column per day
 var GANTT_WEEK_VIEW_THRESHOLD_DAYS = 45;  // beyond this span, switch to one column per week
 var GANTT_MAX_WEEKS = 260;                // ~5 years, hard cap when rendering one column per week

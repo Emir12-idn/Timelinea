@@ -24,7 +24,6 @@ function onOpen() {
     .addSeparator()
     .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
     .addItem('Setup / Reset Settings Sheet', 'addSettingsSheet')
-    .addItem('Setup / Reset Pembelian Bahan Sheet', 'addPurchasesSheet')
     .addItem('Setup / Reset Issues Sheet (HAPUS riwayat masalah)', 'addIssuesSheet')
     .addSeparator()
     .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings')
@@ -36,8 +35,6 @@ function onOpen() {
     .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
     .addItem('Pilih Assigned To (Multi-pilih)', 'openAssignDialog')
     .addItem('Add Resource Row', 'addResourceRow')
-    .addSeparator()
-    .addItem('Tambah Pembelian Bahan', 'addPurchaseRow')
     .addSeparator()
     .addItem('Catat Masalah (Issue Log)', 'logIssue')
     .addSeparator()
@@ -198,7 +195,6 @@ function initializeTimelineaHeadless() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   setupSettingsSheet_(ss);
   setupResourcesSheet_(ss);
-  setupPurchasesSheet_(ss);
   if (!ss.getSheetByName(ISSUES_SHEET)) setupIssuesSheet_(ss); // preserved across re-Initialize; see setupIssuesSheet_
   setupTasksSheet_(ss);
   drawGanttChart();
@@ -400,116 +396,6 @@ function addIssuesSheet() {
     if (response !== ui.Button.YES) return;
   }
   setupIssuesSheet_(ss);
-}
-
-/**
- * Pembelian Bahan (materials/goods purchases) — a task like "Beli Bahan
- * Besi/Baja" is usually several different items bought at once, not one
- * flat Cost/Day number. Total is a live formula (Qty × Harga Satuan), safe
- * across locales since it's plain arithmetic, no function name involved.
- */
-function setupPurchasesSheet_(ss) {
-  var sheet = ss.getSheetByName(PURCHASES_SHEET);
-  if (sheet) ss.deleteSheet(sheet);
-  sheet = ss.insertSheet(PURCHASES_SHEET);
-
-  sheet.getRange(1, 1, 1, PURCHASES_HEADER.length).setValues([PURCHASES_HEADER])
-    .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
-    .setVerticalAlignment('middle');
-  sheet.setRowHeight(1, 28);
-  sheet.setFrozenRows(1);
-
-  sheet.getRange(2, PURCHASES_COL.QTY, 500, 1).setNumberFormat('0.##');
-  sheet.getRange(2, PURCHASES_COL.UNIT_PRICE, 500, 1).setNumberFormat('"Rp"#,##0');
-  sheet.getRange(2, PURCHASES_COL.TOTAL, 500, 1).setNumberFormat('"Rp"#,##0');
-
-  var widths = [40, 65, 200, 200, 60, 90, 110, 110];
-  widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
-
-  var dataRange = sheet.getRange(2, 1, 498, PURCHASES_HEADER.length);
-  sheet.setConditionalFormatRules([
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=ISEVEN(ROW())')
-      .setBackground(COLOR.ZEBRA_ROW_BG)
-      .setRanges([dataRange])
-      .build()
-  ]);
-}
-
-/** Creates (or resets) just the Purchases sheet, without touching Tasks/Settings/Resources/Issues. */
-function addPurchasesSheet() {
-  var ui = SpreadsheetApp.getUi();
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (ss.getSheetByName(PURCHASES_SHEET)) {
-    var response = ui.alert(
-      'Setup Pembelian Bahan Sheet',
-      'Sheet "Pembelian Bahan" sudah ada. Ini akan MENGHAPUS semua catatan pembelian yang sudah ada di sana. Lanjutkan?',
-      ui.ButtonSet.YES_NO);
-    if (response !== ui.Button.YES) return;
-  }
-  setupPurchasesSheet_(ss);
-  runCalculateSchedule();
-}
-
-function nextPurchaseId_(sheet) {
-  var lastRow = sheet.getLastRow();
-  var ids = lastRow >= 2
-    ? sheet.getRange(2, PURCHASES_COL.ID, lastRow - 1, 1).getValues().flat().filter(function (v) { return v !== ''; })
-    : [];
-  return ids.length ? Math.max.apply(null, ids) + 1 : 1;
-}
-
-/**
- * Logs a new material/goods purchase against a task — Qty/Satuan/Harga
- * Satuan are filled in later directly in the sheet (usually not known yet
- * at the moment of logging what's being bought). If a Tasks row is
- * selected when this runs, Task ID/Name are pre-filled automatically.
- * Rolls into that task's Planned/Actual Cost — see readPurchaseTotals_.
- */
-function addPurchaseRow() {
-  var ui = SpreadsheetApp.getUi();
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var purchasesSheet = ss.getSheetByName(PURCHASES_SHEET);
-  if (!purchasesSheet) {
-    ui.alert('Jalankan Timelinea > Reset & Setup > Setup / Reset Pembelian Bahan Sheet dulu.');
-    return;
-  }
-
-  var taskId = '', taskName = '';
-  var activeSheet = ss.getActiveSheet();
-  if (activeSheet.getName() === TASKS_SHEET) {
-    var activeRow = ss.getActiveRange().getRow();
-    if (activeRow >= 2) {
-      taskId = activeSheet.getRange(activeRow, COL.ID).getValue();
-      taskName = activeSheet.getRange(activeRow, COL.NAME).getValue();
-    }
-  }
-
-  var resp = ui.prompt(
-    'Tambah Pembelian Bahan' + (taskName ? ' — ' + taskName : ''),
-    'Nama bahan/barang yang dibeli (Qty, Satuan, dan Harga Satuan bisa dilengkapi langsung di sheet setelah ini):',
-    ui.ButtonSet.OK_CANCEL);
-  if (resp.getSelectedButton() !== ui.Button.OK) return;
-  var item = resp.getResponseText().trim();
-  if (!item) return;
-
-  var newRow = purchasesSheet.getLastRow() + 1;
-  purchasesSheet.getRange(newRow, PURCHASES_COL.ID).setValue(nextPurchaseId_(purchasesSheet));
-  purchasesSheet.getRange(newRow, PURCHASES_COL.TASK_ID).setValue(taskId);
-  purchasesSheet.getRange(newRow, PURCHASES_COL.TASK_NAME).setValue(taskName);
-  purchasesSheet.getRange(newRow, PURCHASES_COL.ITEM).setValue(item);
-  purchasesSheet.getRange(newRow, PURCHASES_COL.QTY).setValue(1).setNumberFormat('0.##');
-  purchasesSheet.getRange(newRow, PURCHASES_COL.UNIT_PRICE).setNumberFormat('"Rp"#,##0');
-  purchasesSheet.getRange(newRow, PURCHASES_COL.TOTAL).setNumberFormat('"Rp"#,##0')
-    .setFormula('=' + colLetter_(PURCHASES_COL.QTY) + newRow + '*' + colLetter_(PURCHASES_COL.UNIT_PRICE) + newRow);
-
-  ss.setActiveSheet(purchasesSheet);
-  purchasesSheet.setActiveSelection(purchasesSheet.getRange(newRow, PURCHASES_COL.UNIT));
-
-  try { calculateSchedule(); } catch (err) { /* the purchase is logged either way; cost rollup just won't show yet */ }
-
-  ui.alert('Pembelian dicatat' + (taskName ? ' untuk task "' + taskName + '"' : '') +
-    '. Lengkapi Qty, Satuan, dan Harga Satuan di sheet Pembelian Bahan — totalnya otomatis masuk ke Planned Cost task itu.');
 }
 
 function nextIssueId_(sheet) {
