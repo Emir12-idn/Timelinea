@@ -121,6 +121,12 @@ function startNewProject() {
   var tasksSheet = ss.getSheetByName(TASKS_SHEET);
   if (!tasksSheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
 
+  if (isProjectLocked_(ss)) {
+    ui.alert('Project ini sedang terkunci (ditandai selesai). Buka dulu lewat Timelinea > Buka Kunci ' +
+      'Project sebelum memulai project baru.');
+    return;
+  }
+
   var response = ui.prompt(
     'Mulai Project Baru',
     'Project yang sedang berjalan akan dikunci sebagai arsip (hanya bisa dilihat lagi lewat ' +

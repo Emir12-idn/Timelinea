@@ -23,6 +23,9 @@ function onOpen() {
     .addSeparator()
     .addItem('Set Baseline (Simpan Rencana Awal)', 'setBaseline')
     .addSeparator()
+    .addItem('Tandai Project Selesai (Kunci)', 'markProjectFinished')
+    .addItem('Buka Kunci Project', 'unlockProject')
+    .addSeparator()
     .addItem('Mulai Project Baru (Arsipkan yang Lama)', 'startNewProject')
     .addItem('Lihat Arsip Project', 'openArchiveViewer')
     .addSeparator()
@@ -65,7 +68,10 @@ function showAbout() {
     'Variance akan menunjukkan berapa hari project melenceng (lebih/kurang) dari rencana itu.\n' +
     'Ada masalah di sebuah task? Pilih baris task-nya lalu Timelinea > Catat Masalah — dicatat di sheet\n' +
     'Issues (kapan terjadi, penyebab, penyelesaian) supaya tidak terulang di project berikutnya. Sheet\n' +
-    'Issues tidak ikut terhapus saat Mulai Project Baru.',
+    'Issues tidak ikut terhapus saat Mulai Project Baru.\n' +
+    'Project sudah selesai dan tidak boleh diubah lagi? Pakai Timelinea > Tandai Project Selesai — sheet\n' +
+    'Tasks, Settings, dan Resources akan terkunci (benar-benar tidak bisa diedit, bukan cuma peringatan)\n' +
+    'sampai dibuka lagi lewat Timelinea > Buka Kunci Project.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -118,7 +124,12 @@ function setupSettingsSheet_(ss) {
   sheet.getRange('A7').setValue('Total Actual Cost (Spent to Date)').setFontWeight('bold');
   sheet.getRange(SETTINGS.TOTAL_ACTUAL_COST).setValue(0).setNumberFormat('"Rp"#,##0');
 
-  sheet.getRange('A9').setValue('Holidays (satu tanggal per baris, mulai baris ini ke bawah):').setFontStyle('italic');
+  sheet.getRange('A9').setValue('Status Project').setFontWeight('bold');
+  sheet.getRange(SETTINGS.PROJECT_STATUS).setValue('Aktif');
+  sheet.getRange('A10').setValue('Selesai Pada').setFontWeight('bold');
+  sheet.getRange(SETTINGS.FINISHED_AT).setNumberFormat('yyyy-MM-dd HH:mm');
+
+  sheet.getRange('A12').setValue('Holidays (satu tanggal per baris, mulai baris ini ke bawah):').setFontStyle('italic');
   sheet.getRange(SETTINGS.HOLIDAYS_FIRST_ROW, SETTINGS.HOLIDAYS_COL, 10, 1).setNumberFormat('yyyy-MM-dd');
 
   sheet.setColumnWidth(1, 260);
