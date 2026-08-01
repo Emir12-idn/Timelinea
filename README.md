@@ -13,6 +13,7 @@ Ms schedule
 - **Gantt chart otomatis**: per-hari untuk proyek pendek, otomatis beralih ke per-minggu untuk proyek panjang (>45 hari) supaya tetap muat di layar; hanya kolom ID + Task Name yang dibekukan agar chart punya ruang lebih
 - Milestone (durasi 0) digambar sebagai diamond (◆), summary/task induk digambar sebagai bar gelap
 - **Arsip project terkunci**: "Mulai Project Baru" mengunci data project lama jadi file terenkripsi (`.tla`, tidak bisa dibuka aplikasi lain) dan mengosongkan Tasks untuk project berikutnya — tanpa perlu bikin Sheet baru. Arsip lama tetap bisa dilihat & diprint (read-only, tidak bisa disave) lewat menu Timelinea
+- **Baseline (rencana vs aktual)**: "Set Baseline" membekukan Start/Finish saat ini sebagai rencana awal; kolom Variance menunjukkan berapa hari project melenceng (positif = telat, negatif = lebih cepat) dari rencana itu
 
 ## Instalasi
 
@@ -52,6 +53,7 @@ Alternatif: gunakan [`clasp`](https://github.com/google/clasp) — file `src/app
 - **Timelinea > Add Resource Row** / **Setup / Reset Resources Sheet** untuk mengelola daftar tenaga kerja.
 - **Timelinea > Mulai Project Baru (Arsipkan yang Lama)** mengunci data project yang sedang berjalan (Tasks + Resources) ke file `.tla` terenkripsi di folder Drive "Timelinea Archives", lalu mengosongkan sheet Tasks untuk project baru — sheet dan file Apps Script tetap satu, tidak perlu bikin salinan baru.
 - **Timelinea > Lihat Arsip Project** membuka daftar arsip lama dalam dialog read-only (tidak bisa diedit/disimpan ulang), dengan tombol Print / Simpan sebagai PDF untuk kebutuhan bagikan ke klien.
+- **Timelinea > Set Baseline** menyimpan Start/Finish yang sedang berjalan sebagai rencana awal (Baseline Start/Finish). Kolom **Variance (d)** lalu otomatis dihitung ulang tiap ada perubahan jadwal — positif berarti project mundur dari rencana, negatif berarti lebih cepat dari rencana. Baseline hanya berubah lewat menu ini, tidak pernah ditimpa oleh perhitungan ulang biasa.
 
 ## Catatan desain
 
