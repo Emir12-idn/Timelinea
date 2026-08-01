@@ -87,18 +87,24 @@ function setupSettingsSheet_(ss) {
   if (sheet) ss.deleteSheet(sheet);
   sheet = ss.insertSheet(SETTINGS_SHEET);
 
-  sheet.getRange('A1').setValue('Timelinea Settings').setFontWeight('bold').setFontSize(14);
-  sheet.getRange('A3').setValue('Project Start Date');
+  sheet.getRange('A1:B1').merge()
+    .setValue('Timelinea Settings')
+    .setFontWeight('bold').setFontSize(15)
+    .setFontColor(COLOR.TITLE_BAR_TEXT).setBackground(COLOR.TITLE_BAR_BG)
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 34);
+
+  sheet.getRange('A3').setValue('Project Start Date').setFontWeight('bold');
   sheet.getRange(SETTINGS.PROJECT_START).setValue(stripTime_(new Date())).setNumberFormat('yyyy-MM-dd');
-  sheet.getRange('A4').setValue('Skip Weekends');
+  sheet.getRange('A4').setValue('Skip Weekends').setFontWeight('bold');
   sheet.getRange(SETTINGS.SKIP_WEEKENDS).insertCheckboxes().setValue(true);
 
   // Totals are written by calculateSchedule() (plain values, not formulas) so
   // they don't depend on the spreadsheet's locale-specific formula syntax
   // (e.g. comma vs semicolon argument separators).
-  sheet.getRange('A6').setValue('Total Planned Cost');
+  sheet.getRange('A6').setValue('Total Planned Cost').setFontWeight('bold');
   sheet.getRange(SETTINGS.TOTAL_PLANNED_COST).setValue(0).setNumberFormat('"Rp"#,##0');
-  sheet.getRange('A7').setValue('Total Actual Cost (Spent to Date)');
+  sheet.getRange('A7').setValue('Total Actual Cost (Spent to Date)').setFontWeight('bold');
   sheet.getRange(SETTINGS.TOTAL_ACTUAL_COST).setValue(0).setNumberFormat('"Rp"#,##0');
 
   sheet.getRange('A9').setValue('Holidays (satu tanggal per baris, mulai baris ini ke bawah):').setFontStyle('italic');
@@ -114,7 +120,9 @@ function setupResourcesSheet_(ss) {
   sheet = ss.insertSheet(RESOURCES_SHEET);
 
   sheet.getRange(1, 1, 1, RESOURCES_HEADER.length).setValues([RESOURCES_HEADER])
-    .setFontWeight('bold').setBackground(COLOR.HEADER_BG);
+    .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 28);
   sheet.setFrozenRows(1);
 
   var sample = [
@@ -133,6 +141,15 @@ function setupResourcesSheet_(ss) {
 
   var widths = [160, 90, 160, 280, 130, 110];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  var zebraRange = sheet.getRange(2, 1, 498, RESOURCES_HEADER.length);
+  sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=ISEVEN(ROW())')
+      .setBackground(COLOR.ZEBRA_ROW_BG)
+      .setRanges([zebraRange])
+      .build()
+  ]);
 }
 
 /** Creates (or resets) just the Resources sheet, without touching Tasks/Settings. */
@@ -172,7 +189,9 @@ function setupTasksSheet_(ss) {
   ss.moveActiveSheet(1);
 
   sheet.getRange(1, 1, 1, TASKS_HEADER.length).setValues([TASKS_HEADER])
-    .setFontWeight('bold').setBackground(COLOR.HEADER_BG);
+    .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 28);
   sheet.setFrozenRows(1);
 
   // Demonstrates a 3-level outline: Phase (0) > task (1) > sub-task (2).
@@ -211,6 +230,28 @@ function setupTasksSheet_(ss) {
     SpreadsheetApp.newDataValidation().requireNumberBetween(0, 100).setAllowInvalid(false).build());
   sheet.getRange(2, COL.LEVEL, 500, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireNumberBetween(0, 8).setAllowInvalid(false).build());
+
+  // Divider borders: end of frozen columns, and end of the Tasks data block
+  // before the Gantt spacer column — makes the layout read as designed
+  // rather than an arbitrary wall of cells.
+  sheet.getRange(1, FROZEN_COLS, 500, 1)
+    .setBorder(null, null, null, true, null, null, COLOR.FROZEN_DIVIDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  sheet.getRange(1, TASKS_LAST_COL, 500, 1)
+    .setBorder(null, null, null, true, null, null, COLOR.FROZEN_DIVIDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  var dataRange = sheet.getRange(2, 1, 498, TASKS_LAST_COL);
+  sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$' + colLetter_(COL.CRITICAL) + '2=TRUE')
+      .setBackground(COLOR.CRITICAL_ROW_BG)
+      .setRanges([dataRange])
+      .build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=ISEVEN(ROW())')
+      .setBackground(COLOR.ZEBRA_ROW_BG)
+      .setRanges([dataRange])
+      .build()
+  ]);
 }
 
 function nextTaskId_(sheet) {

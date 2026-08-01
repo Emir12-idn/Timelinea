@@ -117,9 +117,16 @@ function drawGanttChart() {
   var headerRange = sheet.getRange(1, GANTT_START_COL, 1, buckets.length);
   headerRange.setValues([buckets.map(function (b) { return b.label; })]);
   headerRange.setNumberFormat(timeline.mode === 'day' ? 'd/MM' : '"Wk" d/MM');
-  headerRange.setBackground(COLOR.HEADER_BG).setFontWeight('bold').setHorizontalAlignment('center');
-  sheet.setRowHeight(1, 24);
+  headerRange.setBackground(COLOR.HEADER_ROW_BG).setFontColor(COLOR.HEADER_ROW_TEXT)
+    .setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 28);
   sheet.setColumnWidths(GANTT_START_COL, buckets.length, timeline.mode === 'day' ? 26 : 52);
+
+  // Light grid over the whole chart so bars read as a designed chart rather
+  // than raw color fills, plus a heavier rule separating header from data.
+  var fullChartRange = sheet.getRange(1, GANTT_START_COL, tasks.length + 1, buckets.length);
+  fullChartRange.setBorder(true, true, true, true, true, true, COLOR.GRID_LINE, SpreadsheetApp.BorderStyle.SOLID);
+  headerRange.setBorder(null, null, true, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
   if (timeline.mode === 'day' && settings.skipWeekends) {
     buckets.forEach(function (b, colIdx) {
@@ -130,6 +137,8 @@ function drawGanttChart() {
   }
 
   tasks.forEach(function (t) {
+    sheet.getRange(t.row, 1, 1, TASKS_LAST_COL).setFontWeight(t.isSummary ? 'bold' : 'normal');
+
     var range = bucketIndexRange_(buckets, t.start, t.finish);
     if (range.startIdx === -1) return; // entirely outside the (possibly capped) visible window
     var endIdx = range.endIdx === -1 ? buckets.length - 1 : range.endIdx;

@@ -74,5 +74,27 @@ var COLOR = {
   MILESTONE: '#000000',
   TODAY_BORDER: '#ff9900',
   WEEKEND_BG: '#f3f3f3',
-  HEADER_BG: '#efefef'
+  HEADER_BG: '#efefef',
+
+  // Sheet theme (header bars, row highlighting) — separate from the Gantt
+  // bar palette above so the two can be tuned independently.
+  HEADER_ROW_BG: '#1c4587',
+  HEADER_ROW_TEXT: '#ffffff',
+  ZEBRA_ROW_BG: '#f6f8fb',
+  CRITICAL_ROW_BG: '#fce8e6',
+  TITLE_BAR_BG: '#1c4587',
+  TITLE_BAR_TEXT: '#ffffff',
+  GRID_LINE: '#d9d9d9',
+  FROZEN_DIVIDER: '#9aa5b1'
 };
+
+/** Converts a 1-indexed column number to its A1 letter (1 -> "A", 27 -> "AA"). */
+function colLetter_(col) {
+  var letter = '';
+  while (col > 0) {
+    var rem = (col - 1) % 26;
+    letter = String.fromCharCode(65 + rem) + letter;
+    col = Math.floor((col - 1) / 26);
+  }
+  return letter;
+}
