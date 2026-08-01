@@ -353,13 +353,14 @@ function computeRollups_(tasks, settings) {
 }
 
 /**
- * Writes Total Planned Cost / Total Actual Cost to the Settings sheet as
- * plain values (summed over top-level tasks only, since their cost already
- * rolls up everything beneath them). Plain values instead of a SUMIF formula
- * so this doesn't depend on the spreadsheet's locale-specific formula syntax
- * (e.g. comma vs semicolon argument separators).
+ * Writes Total Planned Cost / Total Actual Cost / Perkiraan Selesai Project /
+ * Status vs Deadline to the Settings sheet as plain values (summed/derived
+ * over top-level tasks only, since their cost and finish date already roll
+ * up everything beneath them). Plain values instead of formulas so this
+ * doesn't depend on the spreadsheet's locale-specific formula syntax (e.g.
+ * comma vs semicolon argument separators).
  */
-function updateSettingsTotals_(ss, tasks) {
+function updateSettingsTotals_(ss, tasks, settings) {
   var sheet = ss.getSheetByName(SETTINGS_SHEET);
   if (!sheet) return;
   var topLevel = tasks.filter(function (t) { return t.level === 0; });
@@ -367,6 +368,26 @@ function updateSettingsTotals_(ss, tasks) {
   var totalActual = topLevel.reduce(function (sum, t) { return sum + t.actualCost; }, 0);
   sheet.getRange(SETTINGS.TOTAL_PLANNED_COST).setValue(totalPlanned);
   sheet.getRange(SETTINGS.TOTAL_ACTUAL_COST).setValue(totalActual);
+
+  if (topLevel.length === 0) return;
+  var projectedFinish = new Date(Math.max.apply(null, topLevel.map(function (t) { return t.finish.getTime(); })));
+  sheet.getRange(SETTINGS.PROJECTED_FINISH).setValue(projectedFinish).setNumberFormat('yyyy-MM-dd');
+
+  var deadlineVal = sheet.getRange(SETTINGS.PROJECT_DEADLINE).getValue();
+  var statusCell = sheet.getRange(SETTINGS.DEADLINE_STATUS);
+  if (!(deadlineVal instanceof Date)) {
+    statusCell.setValue('(isi Deadline Project di atas untuk melihat status)');
+    return;
+  }
+  var deadline = stripTime_(deadlineVal);
+  var diff = signedWorkdaysBetween_(deadline, projectedFinish, settings.skipWeekends, settings.holidaySet);
+  if (diff > 0) {
+    statusCell.setValue('TERLAMBAT ' + diff + ' hari kerja dari deadline');
+  } else if (diff < 0) {
+    statusCell.setValue('Di depan jadwal, ' + (-diff) + ' hari kerja sebelum deadline');
+  } else {
+    statusCell.setValue('Tepat pada deadline');
+  }
 }
 
 /**
@@ -434,7 +455,7 @@ function calculateSchedule() {
   // counting it too would double the Total Days/Total Pay attributed to
   // each person on the Resources sheet.
   updateResourceSheet_(ss, resourceRows, leafTasks);
-  updateSettingsTotals_(ss, tasks);
+  updateSettingsTotals_(ss, tasks, settings);
 
   if (Object.keys(unknownNames).length) {
     try {

@@ -15,6 +15,7 @@ function onOpen() {
     .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
     .addItem('Add Resource Row', 'addResourceRow')
     .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
+    .addItem('Setup / Reset Settings Sheet', 'addSettingsSheet')
     .addSeparator()
     .addItem('Catat Masalah (Issue Log)', 'logIssue')
     .addItem('Setup / Reset Issues Sheet', 'addIssuesSheet')
@@ -96,6 +97,8 @@ function showAbout() {
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
     'Kolom Start/Finish/Planned Cost/Actual Cost/Critical/Slack dihitung otomatis dan akan selalu ditimpa\n' +
     'ulang — Google Sheets akan memberi peringatan kalau Anda mencoba mengeditnya manual.\n' +
+    'Isi "Deadline Project" di sheet Settings (opsional) untuk membandingkan target selesai dari klien dengan\n' +
+    '"Perkiraan Selesai Project" yang dihitung otomatis dari jadwal — statusnya disorot oranye kalau telat.\n' +
     'Mau print sheet Tasks untuk klien? Pakai Timelinea > Print: Sembunyikan Kolom Kerja untuk menyembunyikan\n' +
     'kolom internal (Predecessors s/d Ada Masalah?) sementara, lalu Print: Tampilkan Semua Kolom Lagi setelahnya.\n' +
     'Selesai satu project? Pakai Timelinea > Mulai Project Baru untuk mengarsipkan (mengunci) data lama\n' +
@@ -152,25 +155,43 @@ function setupSettingsSheet_(ss) {
   sheet.getRange(SETTINGS.PROJECT_START).setValue(stripTime_(new Date())).setNumberFormat('yyyy-MM-dd');
   sheet.getRange('A4').setValue('Skip Weekends').setFontWeight('bold');
   sheet.getRange(SETTINGS.SKIP_WEEKENDS).insertCheckboxes().setValue(true);
+  sheet.getRange('A5').setValue('Deadline Project (opsional)').setFontWeight('bold');
+  sheet.getRange(SETTINGS.PROJECT_DEADLINE).setNumberFormat('yyyy-MM-dd');
 
-  // Totals are written by calculateSchedule() (plain values, not formulas) so
-  // they don't depend on the spreadsheet's locale-specific formula syntax
-  // (e.g. comma vs semicolon argument separators).
-  sheet.getRange('A6').setValue('Total Planned Cost').setFontWeight('bold');
+  // Totals/rollups are written by calculateSchedule() (plain values, not
+  // formulas) so they don't depend on the spreadsheet's locale-specific
+  // formula syntax (e.g. comma vs semicolon argument separators).
+  sheet.getRange('A7').setValue('Total Planned Cost').setFontWeight('bold');
   sheet.getRange(SETTINGS.TOTAL_PLANNED_COST).setValue(0).setNumberFormat('"Rp"#,##0');
-  sheet.getRange('A7').setValue('Total Actual Cost (Spent to Date)').setFontWeight('bold');
+  sheet.getRange('A8').setValue('Total Actual Cost (Spent to Date)').setFontWeight('bold');
   sheet.getRange(SETTINGS.TOTAL_ACTUAL_COST).setValue(0).setNumberFormat('"Rp"#,##0');
+  sheet.getRange('A9').setValue('Perkiraan Selesai Project').setFontWeight('bold');
+  sheet.getRange(SETTINGS.PROJECTED_FINISH).setNumberFormat('yyyy-MM-dd');
+  sheet.getRange('A10').setValue('Status vs Deadline').setFontWeight('bold');
+  sheet.getRange(SETTINGS.DEADLINE_STATUS).setValue('(isi Deadline Project di atas untuk melihat status)');
 
-  sheet.getRange('A9').setValue('Status Project').setFontWeight('bold');
+  sheet.getRange('A12').setValue('Status Project').setFontWeight('bold');
   sheet.getRange(SETTINGS.PROJECT_STATUS).setValue('Aktif');
-  sheet.getRange('A10').setValue('Selesai Pada').setFontWeight('bold');
+  sheet.getRange('A13').setValue('Selesai Pada').setFontWeight('bold');
   sheet.getRange(SETTINGS.FINISHED_AT).setNumberFormat('yyyy-MM-dd HH:mm');
 
-  sheet.getRange('A12').setValue('Holidays (satu tanggal per baris, mulai baris ini ke bawah):').setFontStyle('italic');
+  sheet.getRange('A15').setValue('Holidays (satu tanggal per baris, mulai baris ini ke bawah):').setFontStyle('italic');
   sheet.getRange(SETTINGS.HOLIDAYS_FIRST_ROW, SETTINGS.HOLIDAYS_COL, 10, 1).setNumberFormat('yyyy-MM-dd');
 
   sheet.setColumnWidth(1, 260);
-  sheet.setColumnWidth(2, 140);
+  sheet.setColumnWidth(2, 160);
+
+  // Same "calm everywhere except the one thing that must never be missed"
+  // rule as the Tasks sheet's Variance highlight: if the project is
+  // projected to miss its deadline, that status line should be impossible
+  // to scroll past without noticing.
+  sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextContains('TERLAMBAT')
+      .setBackground(COLOR.VARIANCE_LATE_BG).setFontColor(COLOR.VARIANCE_LATE_TEXT).setBold(true)
+      .setRanges([sheet.getRange(SETTINGS.DEADLINE_STATUS)])
+      .build()
+  ]);
 }
 
 function setupResourcesSheet_(ss) {
@@ -223,6 +244,28 @@ function addResourcesSheet() {
     if (response !== ui.Button.YES) return;
   }
   setupResourcesSheet_(ss);
+  runCalculateSchedule();
+}
+
+/**
+ * Creates (or resets) just the Settings sheet, without touching Tasks/
+ * Resources/Issues — the way to pick up new Settings fields (e.g. Deadline
+ * Project) on a sheet initialized before they existed, without re-running
+ * Initialize / Reset Sheets, which would also wipe Tasks data.
+ */
+function addSettingsSheet() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(SETTINGS_SHEET)) {
+    var response = ui.alert(
+      'Setup Settings Sheet',
+      'Sheet "Settings" akan direset ke default (Project Start Date, Skip Weekends, Deadline Project, dan ' +
+      'daftar Holidays akan kembali kosong/default — isi ulang manual setelah ini). Sheet Tasks, Resources, ' +
+      'dan Issues TIDAK akan disentuh. Lanjutkan?',
+      ui.ButtonSet.YES_NO);
+    if (response !== ui.Button.YES) return;
+  }
+  setupSettingsSheet_(ss);
   runCalculateSchedule();
 }
 

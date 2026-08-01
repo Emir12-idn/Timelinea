@@ -84,11 +84,14 @@ var GANTT_MAX_WEEKS = 260;                // ~5 years, hard cap when rendering o
 var SETTINGS = {
   PROJECT_START: 'B3',
   SKIP_WEEKENDS: 'B4',
-  TOTAL_PLANNED_COST: 'B6',
-  TOTAL_ACTUAL_COST: 'B7',
-  PROJECT_STATUS: 'B9',
-  FINISHED_AT: 'B10',
-  HOLIDAYS_FIRST_ROW: 13,
+  PROJECT_DEADLINE: 'B5',    // optional: overall target finish date, user-entered
+  TOTAL_PLANNED_COST: 'B7',
+  TOTAL_ACTUAL_COST: 'B8',
+  PROJECTED_FINISH: 'B9',    // computed: latest Finish among top-level tasks
+  DEADLINE_STATUS: 'B10',    // computed: PROJECTED_FINISH vs PROJECT_DEADLINE, in words
+  PROJECT_STATUS: 'B12',
+  FINISHED_AT: 'B13',
+  HOLIDAYS_FIRST_ROW: 16,
   HOLIDAYS_COL: 2 // column B
 };
 
