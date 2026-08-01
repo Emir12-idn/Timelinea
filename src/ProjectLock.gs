@@ -17,7 +17,50 @@ var LOCK_DESCRIPTION_ = 'Timelinea: Project Selesai (terkunci)';
 function isProjectLocked_(ss) {
   var sheet = ss.getSheetByName(TASKS_SHEET);
   if (!sheet) return false;
-  return sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).length > 0;
+  return sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)
+    .some(function (p) { return p.getDescription() === LOCK_DESCRIPTION_; });
+  // Matched by description (not just "any protection exists") so a protection
+  // the user set up themselves for an unrelated reason isn't mistaken for a
+  // Timelinea lock, and isn't wiped out by unlockProject() below.
+}
+
+/**
+ * Software backstop for the spreadsheet OWNER specifically. Sheets'
+ * Protection API cannot exclude the file owner — Protection.removeEditor(s)
+ * is documented to silently have no effect when the target is the owner —
+ * so for the common case where the buyer owns their own copy of the sheet,
+ * protect() alone would make "Tandai Project Selesai" a no-op for exactly
+ * the person it's meant to stop from absent-mindedly editing. This onEdit
+ * hook (wired in Triggers.gs) adds a real, enforced backstop on top: a
+ * single-cell edit is reverted automatically using e.oldValue; a multi-cell
+ * edit (e.g. pasting a block) has no old values to restore, so it gets a
+ * loud warning instead asking for a manual Ctrl+Z. Not a perfect guarantee
+ * for multi-cell edits, but far better than silently doing nothing.
+ */
+function enforceLockOnEdit_(e) {
+  var isSingleCell = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
+  var reverted = true;
+
+  if (isSingleCell) {
+    var oldValue = e.oldValue;
+    if (oldValue === 'TRUE') oldValue = true;
+    else if (oldValue === 'FALSE') oldValue = false;
+    if (oldValue === undefined) {
+      e.range.clearContent();
+    } else {
+      e.range.setValue(oldValue);
+    }
+  } else {
+    reverted = false;
+  }
+
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast(
+      'Project ini terkunci (ditandai selesai) — edit dibatalkan otomatis. Buka dulu lewat Timelinea > ' +
+      'Buka Kunci Project untuk mengedit.' +
+      (reverted ? '' : ' Perubahan pada banyak sel sekaligus tidak bisa dibatalkan otomatis — tekan Ctrl+Z.'),
+      'Timelinea — Terkunci', 6);
+  } catch (err) { /* best-effort notice only */ }
 }
 
 function markProjectFinished() {
@@ -33,9 +76,12 @@ function markProjectFinished() {
 
   var response = ui.alert(
     'Tandai Project Selesai',
-    'Sheet Tasks, Settings, dan Resources akan dikunci (tidak bisa diedit siapa pun, termasuk yang ' +
-    'punya akses Editor ke file ini) sampai dibuka kembali lewat Timelinea > Buka Kunci Project. ' +
-    'Sheet Issues tetap bisa diedit untuk catatan pasca-project. Lanjutkan?',
+    'Sheet Tasks, Settings, dan Resources akan dikunci sampai dibuka kembali lewat Timelinea > Buka Kunci ' +
+    'Project. Ini benar-benar memblokir orang lain yang diberi akses Editor ke file ini. Untuk Anda sendiri ' +
+    'sebagai pemilik file (Google Sheets tidak mengizinkan pemilik dikunci total), Timelinea akan membatalkan ' +
+    'otomatis tiap edit satu-sel dan memberi peringatan kalau Anda mengedit banyak sel sekaligus (mis. paste) — ' +
+    'bukan jaminan mutlak, tapi cukup untuk mencegah salah edit tanpa sadar. Sheet Issues tetap bisa diedit ' +
+    'untuk catatan pasca-project. Lanjutkan?',
     ui.ButtonSet.YES_NO);
   if (response !== ui.Button.YES) return;
 
@@ -75,7 +121,7 @@ function unlockProject() {
     var sheet = ss.getSheetByName(name);
     if (!sheet) return;
     sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function (p) {
-      if (p.canEdit()) p.remove();
+      if (p.getDescription() === LOCK_DESCRIPTION_ && p.canEdit()) p.remove();
     });
   });
 

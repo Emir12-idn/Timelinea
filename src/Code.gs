@@ -70,8 +70,8 @@ function showAbout() {
     'Issues (kapan terjadi, penyebab, penyelesaian) supaya tidak terulang di project berikutnya. Sheet\n' +
     'Issues tidak ikut terhapus saat Mulai Project Baru.\n' +
     'Project sudah selesai dan tidak boleh diubah lagi? Pakai Timelinea > Tandai Project Selesai — sheet\n' +
-    'Tasks, Settings, dan Resources akan terkunci (benar-benar tidak bisa diedit, bukan cuma peringatan)\n' +
-    'sampai dibuka lagi lewat Timelinea > Buka Kunci Project.',
+    'Tasks, Settings, dan Resources akan terkunci untuk editor lain, dan edit oleh Anda sendiri (pemilik file)\n' +
+    'akan dibatalkan otomatis oleh script, sampai dibuka lagi lewat Timelinea > Buka Kunci Project.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 

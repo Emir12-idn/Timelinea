@@ -9,6 +9,16 @@
 function onEdit(e) {
   if (!e || !e.range) return;
   var sheetName = e.range.getSheet().getName();
+
+  // Checked first, and even on the header row: Sheets' Protection API can't
+  // exclude the spreadsheet owner, so this is the real enforcement for a
+  // "Tandai Project Selesai" lock when the person editing is the owner.
+  // See ProjectLock.gs / enforceLockOnEdit_ for why.
+  if (LOCKED_SHEETS_.indexOf(sheetName) !== -1 && isProjectLocked_(e.range.getSheet().getParent())) {
+    enforceLockOnEdit_(e);
+    return;
+  }
+
   if (sheetName !== TASKS_SHEET && sheetName !== RESOURCES_SHEET) return;
   if (e.range.getRow() === 1) return; // header row
 
