@@ -45,17 +45,25 @@ function showAbout() {
 }
 
 function initializeTimelinea() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
   var response = ui.alert(
     'Initialize Timelinea',
     'Ini akan membuat/menimpa sheet "Tasks" dan "Settings" dengan template kosong (data contoh disertakan). Lanjutkan?',
     ui.ButtonSet.YES_NO);
   if (response !== ui.Button.YES) return;
+  initializeTimelineaHeadless();
+}
 
+/**
+ * Same setup as initializeTimelinea() but without any Ui calls, so it can be
+ * run from contexts with no user interface (e.g. the Apps Script Execution
+ * API, used to bootstrap the sheet from outside the Sheets editor).
+ */
+function initializeTimelineaHeadless() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   setupSettingsSheet_(ss);
   setupTasksSheet_(ss);
-  runDrawGanttChart();
+  drawGanttChart();
 }
 
 function setupSettingsSheet_(ss) {
