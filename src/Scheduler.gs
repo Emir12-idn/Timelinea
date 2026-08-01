@@ -64,9 +64,8 @@ function readTasks_(sheet) {
   var values = sheet.getRange(2, 1, lastRow - 1, TASKS_LAST_COL).getValues();
   var tasks = [];
   values.forEach(function (row, i) {
-    if (row[COL.NAME - 1] === '' && row[COL.ID - 1] === '') return; // skip blank rows
     var id = row[COL.ID - 1];
-    if (id === '' || id === null) throw new Error('Baris ' + (i + 2) + ' tidak punya ID.');
+    if (id === '' || id === null) return; // row not filled in yet (no ID) — skip until it has one
     tasks.push({
       row: i + 2,
       id: Number(id),
@@ -295,6 +294,23 @@ function computeRollups_(tasks, settings) {
 }
 
 /**
+ * Writes Total Planned Cost / Total Actual Cost to the Settings sheet as
+ * plain values (summed over top-level tasks only, since their cost already
+ * rolls up everything beneath them). Plain values instead of a SUMIF formula
+ * so this doesn't depend on the spreadsheet's locale-specific formula syntax
+ * (e.g. comma vs semicolon argument separators).
+ */
+function updateSettingsTotals_(ss, tasks) {
+  var sheet = ss.getSheetByName(SETTINGS_SHEET);
+  if (!sheet) return;
+  var topLevel = tasks.filter(function (t) { return t.level === 0; });
+  var totalPlanned = topLevel.reduce(function (sum, t) { return sum + t.plannedCost; }, 0);
+  var totalActual = topLevel.reduce(function (sum, t) { return sum + t.actualCost; }, 0);
+  sheet.getRange(SETTINGS.TOTAL_PLANNED_COST).setValue(totalPlanned);
+  sheet.getRange(SETTINGS.TOTAL_ACTUAL_COST).setValue(totalActual);
+}
+
+/**
  * Recomputes Start/Finish/Critical/Slack/Cost for every task in the Tasks
  * sheet (rolling up summary/subtask rows) and writes the results back.
  * Returns the task list (with computed fields) so callers (e.g.
@@ -347,6 +363,7 @@ function calculateSchedule() {
   });
 
   updateResourceSheet_(ss, resourceRows, tasks);
+  updateSettingsTotals_(ss, tasks);
 
   if (Object.keys(unknownNames).length) {
     try {

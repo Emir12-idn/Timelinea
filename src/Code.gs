@@ -87,12 +87,13 @@ function setupSettingsSheet_(ss) {
   sheet.getRange('A4').setValue('Skip Weekends');
   sheet.getRange(SETTINGS.SKIP_WEEKENDS).insertCheckboxes().setValue(true);
 
+  // Totals are written by calculateSchedule() (plain values, not formulas) so
+  // they don't depend on the spreadsheet's locale-specific formula syntax
+  // (e.g. comma vs semicolon argument separators).
   sheet.getRange('A6').setValue('Total Planned Cost');
-  sheet.getRange(SETTINGS.TOTAL_PLANNED_COST)
-    .setFormula('=SUMIF(Tasks!C2:C1000,0,Tasks!K2:K1000)').setNumberFormat('"Rp"#,##0');
+  sheet.getRange(SETTINGS.TOTAL_PLANNED_COST).setValue(0).setNumberFormat('"Rp"#,##0');
   sheet.getRange('A7').setValue('Total Actual Cost (Spent to Date)');
-  sheet.getRange(SETTINGS.TOTAL_ACTUAL_COST)
-    .setFormula('=SUMIF(Tasks!C2:C1000,0,Tasks!L2:L1000)').setNumberFormat('"Rp"#,##0');
+  sheet.getRange(SETTINGS.TOTAL_ACTUAL_COST).setValue(0).setNumberFormat('"Rp"#,##0');
 
   sheet.getRange('A9').setValue('Holidays (satu tanggal per baris, mulai baris ini ke bawah):').setFontStyle('italic');
   sheet.getRange(SETTINGS.HOLIDAYS_FIRST_ROW, SETTINGS.HOLIDAYS_COL, 10, 1).setNumberFormat('yyyy-MM-dd');
