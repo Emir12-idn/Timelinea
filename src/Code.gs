@@ -41,8 +41,8 @@ function onOpen() {
     .addItem('Recalculate Schedule', 'runCalculateSchedule')
     .addItem('Refresh Gantt Chart', 'runDrawGanttChart')
     .addSeparator()
-    .addItem('Print: Sembunyikan Kolom Kerja', 'hideColumnsForPrint')
-    .addItem('Print: Tampilkan Semua Kolom Lagi', 'showAllColumns')
+    .addItem('Print: Siapkan Tampilan Ringkas', 'hideColumnsForPrint')
+    .addItem('Print: Tampilkan Semua Lagi', 'showAllColumns')
     .addSeparator()
     .addItem('Set Baseline (Simpan Rencana Awal)', 'setBaseline')
     .addSeparator()
@@ -76,29 +76,50 @@ function runDrawGanttChart() {
   }
 }
 
+/** The last row that actually has a task (by ID), ignoring the hundreds of pre-formatted blank rows below it. */
+function lastTaskRow_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 1;
+  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
+  var last = 1;
+  ids.forEach(function (row, i) { if (row[0] !== '' && row[0] !== null) last = i + 2; });
+  return last;
+}
+
 /**
- * Hides the "working" columns (Predecessors through Ada Masalah?) so the
- * Tasks sheet prints as a clean ID/Task Name/Level/Duration/Start/Finish
- * list plus the Gantt chart — the scheduling internals (predecessor syntax,
- * cost figures, critical/slack flags, baseline/variance, issue flag) are
- * meant for working in the app, not for handing to a client or field crew.
- * Only hides column width (nothing is deleted or cleared); Timelinea >
- * Print: Tampilkan Semua Kolom Lagi reverses it.
+ * Hides the "+/↓/-" control column and the working columns (Predecessors
+ * through Ada Masalah? — predecessor syntax, cost figures, critical/slack
+ * flags, baseline/variance, issue flag) so the Tasks sheet prints as a
+ * clean ID/Task Name/Level/Duration/Start/Finish list plus the Gantt chart,
+ * meant for a client or field crew. Also hides every row past the last
+ * actual task — rows are pre-formatted with checkboxes/validation hundreds
+ * of rows ahead for smooth data entry, and without this a printout would
+ * show a long tail of empty-looking rows that still render checkboxes.
+ * Only hides — nothing is deleted or cleared; Timelinea > Print: Tampilkan
+ * Semua Lagi reverses both.
  */
 function hideColumnsForPrint() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) { SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.'); return; }
-  sheet.hideColumns(COL.PREDECESSORS, ROW_ACTION_COL - COL.PREDECESSORS + 1); // through the +/↓/- control column too
+  sheet.hideColumns(ROW_ACTION_COL, 1);
+  sheet.hideColumns(COL.PREDECESSORS, TASKS_LAST_COL - COL.PREDECESSORS + 1);
+
+  var lastTask = lastTaskRow_(sheet);
+  var maxRows = sheet.getMaxRows();
+  if (maxRows > lastTask) sheet.hideRows(lastTask + 1, maxRows - lastTask);
+
   SpreadsheetApp.getActiveSpreadsheet().toast(
-    'Kolom Predecessors s/d +/↓/- disembunyikan. Pakai Timelinea > Print: Tampilkan Semua Kolom Lagi untuk mengembalikan.',
+    'Kolom kerja dan baris tanpa task disembunyikan. Pakai Timelinea > Print: Tampilkan Semua Lagi untuk mengembalikan.',
     'Timelinea', 6);
 }
 
 function showAllColumns() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) { SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.'); return; }
-  sheet.showColumns(COL.PREDECESSORS, ROW_ACTION_COL - COL.PREDECESSORS + 1);
-  SpreadsheetApp.getActiveSpreadsheet().toast('Semua kolom ditampilkan lagi.', 'Timelinea', 4);
+  sheet.showColumns(ROW_ACTION_COL, 1);
+  sheet.showColumns(COL.PREDECESSORS, TASKS_LAST_COL - COL.PREDECESSORS + 1);
+  sheet.showRows(1, sheet.getMaxRows());
+  SpreadsheetApp.getActiveSpreadsheet().toast('Semua kolom dan baris ditampilkan lagi.', 'Timelinea', 4);
 }
 
 function showAbout() {
@@ -114,15 +135,18 @@ function showAbout() {
     'centang. Gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sheet Resources.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
-    'Tidak perlu buka menu Timelinea tiap mau tambah/hapus baris — klik sel di kolom "+ / ↓ / -" (kolom T,\n' +
-    'sebelum area Gantt chart): "+" = task baru sejajar, "↓" = subtask (anak, satu level lebih dalam),\n' +
-    '"-" = hapus baris itu (akan ada konfirmasi dulu).\n' +
+    'Tidak perlu buka menu Timelinea tiap mau tambah/hapus baris — klik sel di kolom "+ / ↓ / -" (tepat di\n' +
+    'sebelah Task Name, selalu kelihatan walau di-scroll): "+" = task baru sejajar, "↓" = subtask (anak, satu\n' +
+    'level lebih dalam), "-" = hapus baris itu (akan ada konfirmasi dulu).\n' +
+    'Cost/Day, Planned Cost, dan Actual Cost disembunyikan secara default (harga modal tidak boleh bocor ke\n' +
+    'klien) — pakai Timelinea > Print: Tampilkan Semua Lagi kalau perlu melihat/mengeditnya.\n' +
     'Kolom Start/Finish/Planned Cost/Actual Cost/Critical/Slack dihitung otomatis dan akan selalu ditimpa\n' +
     'ulang — Google Sheets akan memberi peringatan kalau Anda mencoba mengeditnya manual.\n' +
     'Isi "Deadline Project" di sheet Settings (opsional) untuk membandingkan target selesai dari klien dengan\n' +
     '"Perkiraan Selesai Project" yang dihitung otomatis dari jadwal — statusnya disorot oranye kalau telat.\n' +
-    'Mau print sheet Tasks untuk klien? Pakai Timelinea > Print: Sembunyikan Kolom Kerja untuk menyembunyikan\n' +
-    'kolom internal (Predecessors s/d Ada Masalah?) sementara, lalu Print: Tampilkan Semua Kolom Lagi setelahnya.\n' +
+    'Mau print sheet Tasks untuk klien? Pakai Timelinea > Print: Siapkan Tampilan Ringkas untuk menyembunyikan\n' +
+    'kolom internal (termasuk Cost/Day, Planned Cost, Actual Cost — jangan sampai klien lihat harga modal) dan\n' +
+    'baris yang belum ada task-nya. Timelinea > Print: Tampilkan Semua Lagi mengembalikannya untuk kerja lagi.\n' +
     'Selesai satu project? Pakai Timelinea > Mulai Project Baru untuk mengarsipkan (mengunci) data lama\n' +
     'dan mengosongkan Tasks untuk project berikutnya — tanpa perlu bikin Sheet baru. Arsip lama tetap bisa\n' +
     'dilihat & diprint lewat Timelinea > Lihat Arsip Project, tapi tidak bisa diedit lagi.\n' +
@@ -453,16 +477,16 @@ function setupTasksSheet_(ss) {
   // Assigned To already matches a Resources entry — their Planned Cost comes
   // from that resource's Rate/Day instead, so the two don't double up.
   var sample = [
-    [1, 'Kick-off Proyek', 0, 0, '', '', '', 0, '', 0, '', '', true, '', '', '', '', '', false],
-    [2, 'Tahap 1: Survey & Bahan', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
-    [3, 'Survey Lokasi & Ukur', 1, 3, '', '', '1FS', 0, 'Mandor Joko', 0, '', '', false, '', '', '', '', '', false],
-    [4, 'Beli Bahan Besi/Baja', 1, 5, '', '', '3FS', 0, 'Mandor Joko', 0, '', '', false, '', '', '', '', '', false],
-    [5, 'Tahap 2: Fabrikasi & Pasang', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
-    [6, 'Fabrikasi', 1, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
-    [7, 'Potong & Rangka Besi', 2, 7, '', '', '4FS', 0, 'Subur', 0, '', '', false, '', '', '', '', '', false],
-    [8, 'Las Sambungan', 2, 6, '', '', '4FS', 0, 'Ade', 0, '', '', false, '', '', '', '', '', false],
-    [9, 'Pasang di Lokasi & Finishing Cat', 1, 4, '', '', '7FS,8FS', 0, 'Subur,Budi', 0, '', '', false, '', '', '', '', '', false],
-    [10, 'Serah Terima ke Klien', 0, 0, '', '', '9FS', 0, 'Mandor Joko', 0, '', '', true, '', '', '', '', '', false]
+    [1, 'Kick-off Proyek', '', 0, 0, '', '', '', 0, '', 0, '', '', true, '', '', '', '', '', false],
+    [2, 'Tahap 1: Survey & Bahan', '', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [3, 'Survey Lokasi & Ukur', '', 1, 3, '', '', '1FS', 0, 'Mandor Joko', 0, '', '', false, '', '', '', '', '', false],
+    [4, 'Beli Bahan Besi/Baja', '', 1, 5, '', '', '3FS', 0, 'Mandor Joko', 0, '', '', false, '', '', '', '', '', false],
+    [5, 'Tahap 2: Fabrikasi & Pasang', '', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [6, 'Fabrikasi', '', 1, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [7, 'Potong & Rangka Besi', '', 2, 7, '', '', '4FS', 0, 'Subur', 0, '', '', false, '', '', '', '', '', false],
+    [8, 'Las Sambungan', '', 2, 6, '', '', '4FS', 0, 'Ade', 0, '', '', false, '', '', '', '', '', false],
+    [9, 'Pasang di Lokasi & Finishing Cat', '', 1, 4, '', '', '7FS,8FS', 0, 'Subur,Budi', 0, '', '', false, '', '', '', '', '', false],
+    [10, 'Serah Terima ke Klien', '', 0, 0, '', '', '9FS', 0, 'Mandor Joko', 0, '', '', true, '', '', '', '', '', false]
   ];
   sheet.getRange(2, 1, sample.length, TASKS_HEADER.length).setValues(sample);
 
@@ -485,7 +509,7 @@ function setupTasksSheet_(ss) {
   sheet.getRange(2, COL.VARIANCE, 500, 1).setNumberFormat('+0;-0;0');
   sheet.getRange(2, COL.HAS_ISSUE, 500, 1).insertCheckboxes();
 
-  var widths = [40, 220, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65, 95, 95, 75, 90];
+  var widths = [40, 220, 50, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65, 95, 95, 75, 90];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
   sheet.getRange(2, COL.PCT_COMPLETE, 500, 1).setDataValidation(
@@ -527,26 +551,37 @@ function setupTasksSheet_(ss) {
   applyAutoColumnWarnings_(sheet);
   applyAssignedToDropdown_(ss);
   applyRowActionColumn_(sheet);
+
+  // Cost/Day, Planned Cost, Actual Cost hidden from the start, not just on
+  // demand before printing — reported concern: sending/printing a work
+  // schedule must never accidentally reveal internal cost (harga modal) to
+  // a client, and relying on remembering to run Print: Siapkan Tampilan
+  // Ringkas every single time isn't a safe enough default. Timelinea >
+  // Print: Tampilkan Semua Lagi reveals them again when actually needed
+  // (e.g. reviewing margins), and re-hiding is one click away.
+  sheet.hideColumns(COL.COST_RATE, 3);
 }
 
 /**
- * Sets up the "+/↓/-" per-row control in ROW_ACTION_COL (the old Gantt
- * spacer column, reused rather than adding a new column — that would have
- * needed a full Tasks reset for anyone already using the sheet). A
+ * Sets up the "+/↓/-" per-row control in ROW_ACTION_COL — placed right after
+ * Task Name and frozen (see FROZEN_COLS), not at the far end of the sheet:
+ * putting it past every other column meant scrolling across the whole sheet
+ * just to reach it, which defeated the point of a quick per-row control. A
  * dropdown, not checkboxes, since it needs three distinct actions in one
- * column: + Tambah sejajar (sibling), ↓ Tambah subtask (child), - Hapus
- * baris (delete). setAllowInvalid(true) so it doesn't hard-block whatever a
- * user types there. Actual behavior lives in handleRowAction_, wired from
- * onEdit.
+ * column: + (sibling, same level), ↓ (subtask, one level deeper), - (delete,
+ * with confirmation). Values are bare symbols, not words, so the column
+ * stays narrow — see handleRowAction_ (wired from onEdit) for what each one
+ * does. setAllowInvalid(true) so it doesn't hard-block whatever a user types.
  */
 function applyRowActionColumn_(sheet) {
   sheet.getRange(1, ROW_ACTION_COL).setValue('+ / ↓ / -')
     .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sheet.setColumnWidth(ROW_ACTION_COL, 140);
+  sheet.setColumnWidth(ROW_ACTION_COL, 50);
   sheet.getRange(2, ROW_ACTION_COL, 498, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE], true)
-      .setAllowInvalid(true).build());
+      .setAllowInvalid(true).build())
+    .setHorizontalAlignment('center');
 }
 
 /**
@@ -560,9 +595,9 @@ function refreshRowActionColumn() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
   applyRowActionColumn_(sheet);
-  ui.alert('Selesai. Kolom "+ / ↓ / -" di sheet Tasks (kolom T, sebelum area Gantt chart) sekarang aktif — pilih ' +
-    '"+ Tambah sejajar" untuk task baru selevel di bawahnya, "↓ Tambah subtask" untuk anak satu level lebih ' +
-    'dalam, atau "- Hapus baris" untuk menghapus baris itu (akan diminta konfirmasi dulu).');
+  ui.alert('Selesai. Kolom "+ / ↓ / -" di sheet Tasks (tepat di sebelah Task Name) sekarang aktif — pilih "+" ' +
+    'untuk task baru selevel di bawahnya, "↓" untuk subtask (anak, satu level lebih dalam), atau "-" untuk ' +
+    'menghapus baris itu (akan diminta konfirmasi dulu).');
 }
 
 /**

@@ -9,44 +9,50 @@ var SETTINGS_SHEET = 'Settings';
 var RESOURCES_SHEET = 'Resources';
 var ISSUES_SHEET = 'Issues';
 
-// Tasks sheet columns (1-indexed)
+// Tasks sheet columns (1-indexed). ROW_ACTION sits right after Task Name
+// (not at the far end) and is a frozen column — reported that putting it
+// past every other column meant scrolling across the whole sheet just to
+// reach it, which defeated the point of a quick per-row control.
 var COL = {
   ID: 1,
   NAME: 2,
-  LEVEL: 3,
-  DURATION: 4,
-  START: 5,
-  FINISH: 6,
-  PREDECESSORS: 7,
-  PCT_COMPLETE: 8,
-  RESOURCE: 9,
-  COST_RATE: 10,
-  PLANNED_COST: 11,
-  ACTUAL_COST: 12,
-  MILESTONE: 13,
-  CRITICAL: 14,
-  SLACK: 15,
-  BASELINE_START: 16,
-  BASELINE_FINISH: 17,
-  VARIANCE: 18,
-  HAS_ISSUE: 19
+  ROW_ACTION: 3,
+  LEVEL: 4,
+  DURATION: 5,
+  START: 6,
+  FINISH: 7,
+  PREDECESSORS: 8,
+  PCT_COMPLETE: 9,
+  RESOURCE: 10,
+  COST_RATE: 11,
+  PLANNED_COST: 12,
+  ACTUAL_COST: 13,
+  MILESTONE: 14,
+  CRITICAL: 15,
+  SLACK: 16,
+  BASELINE_START: 17,
+  BASELINE_FINISH: 18,
+  VARIANCE: 19,
+  HAS_ISSUE: 20
 };
 
 var TASKS_HEADER = [
-  'ID', 'Task Name', 'Level', 'Duration (d)', 'Start', 'Finish',
+  'ID', 'Task Name', '+ / ↓ / -', 'Level', 'Duration (d)', 'Start', 'Finish',
   'Predecessors', '% Complete', 'Assigned To', 'Cost/Day', 'Planned Cost',
   'Actual Cost', 'Milestone', 'Critical', 'Slack (d)',
   'Baseline Start', 'Baseline Finish', 'Variance (d)', 'Ada Masalah?'
 ];
 
-var TASKS_LAST_COL = 19;   // column S
-var FROZEN_COLS = 2;       // only ID + Task Name — leaves room for the Gantt chart on screen
-var ROW_ACTION_COL = 20;   // column T (the old Gantt spacer) — per-row +/subtask/- control, see handleRowAction_
-var GANTT_START_COL = 21;  // column U
+var TASKS_LAST_COL = 20;   // column T
+var FROZEN_COLS = 3;       // ID + Task Name + the +/subtask/- control, always visible regardless of scroll
+var ROW_ACTION_COL = COL.ROW_ACTION;
+var GANTT_START_COL = 22;  // column V (leaves column U as a spacer)
 
-var ROW_ACTION_ADD = '+ Tambah sejajar';
-var ROW_ACTION_SUBTASK = '↓ Tambah subtask';
-var ROW_ACTION_DELETE = '- Hapus baris';
+// Bare symbols on purpose — kept as compact as possible so the column stays
+// narrow and reads as a simple control, not another data field to fill in.
+var ROW_ACTION_ADD = '+';
+var ROW_ACTION_SUBTASK = '↓';
+var ROW_ACTION_DELETE = '-';
 
 // Issues sheet columns (1-indexed) — a running problem/lessons-learned log,
 // linked to Tasks by ID but never cleared by "Mulai Project Baru", since the
