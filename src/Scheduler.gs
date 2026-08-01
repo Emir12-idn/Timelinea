@@ -287,18 +287,24 @@ function computeCriticalPath_(leafTasks, byId, order, successors, settings) {
 
 /**
  * Planned/actual cost for a leaf task = labor cost (each assignee's
- * Rate/Day × Duration, from the Resources sheet) + Cost/Day × Duration
- * (materials/equipment; treated as a flat one-time cost for milestones).
- * Assignee names not found in Resources are collected into unknownNames
- * (by reference) so calculateSchedule can warn about typos.
+ * Rate/Day × effective days, from the Resources sheet) + Cost/Day ×
+ * effective days (materials/equipment). Milestones are always a flat
+ * one-day cost for BOTH parts — previously only Cost/Day was flattened for
+ * milestones while labor cost still multiplied by whatever Duration
+ * happened to be left in the cell (e.g. a task with Duration 5 that got
+ * checked as Milestone afterward, without also zeroing Duration), so an
+ * assignee's cost could silently be 5x too high on a milestone. Assignee
+ * names not found in Resources are collected into unknownNames (by
+ * reference) so calculateSchedule can warn about typos.
  */
 function computeLeafCost_(t, rateByName, unknownNames) {
+  var effectiveDays = t.milestone ? 1 : Math.max(t.duration, 1);
   var laborCost = t.assignees.reduce(function (sum, name) {
     var key = name.toLowerCase();
     if (!(key in rateByName)) { unknownNames[name] = true; return sum; }
-    return sum + rateByName[key] * Math.max(t.duration, 1);
+    return sum + rateByName[key] * effectiveDays;
   }, 0);
-  var flatCost = t.milestone ? t.costRate : t.costRate * Math.max(t.duration, 1);
+  var flatCost = t.costRate * effectiveDays;
   t.plannedCost = laborCost + flatCost;
   t.actualCost = t.plannedCost * (Math.min(Math.max(t.pctComplete, 0), 100) / 100);
 }
@@ -326,6 +332,23 @@ function computeRollups_(tasks, settings) {
     t.actualCost = children.reduce(function (sum, c) { return sum + c.actualCost; }, 0);
     t.critical = children.some(function (c) { return c.critical; });
     t.slack = Math.min.apply(null, children.map(function (c) { return c.slack; }));
+
+    // Assigned To for a summary row is purely informational — a merged,
+    // de-duplicated list of everyone assigned anywhere underneath it (each
+    // child is already resolved by this point, leaf or summary, since rows
+    // are processed bottom-to-top). It does NOT feed cost — summary cost is
+    // already the sum of children's cost above — and calculateSchedule
+    // excludes summary rows from updateResourceSheet_'s per-person totals,
+    // so showing names here doesn't double-count anyone's allocated days.
+    var seen = {};
+    var merged = [];
+    children.forEach(function (c) {
+      c.assignees.forEach(function (name) {
+        var key = name.toLowerCase();
+        if (!seen[key]) { seen[key] = true; merged.push(name); }
+      });
+    });
+    t.assignees = merged;
   }
 }
 
@@ -397,6 +420,7 @@ function calculateSchedule() {
     if (t.isSummary) {
       sheet.getRange(t.row, COL.DURATION).setValue(t.duration);
       sheet.getRange(t.row, COL.PCT_COMPLETE).setValue(Math.round(t.pctComplete * 10) / 10);
+      sheet.getRange(t.row, COL.RESOURCE).setValue(t.assignees.join(', '));
     }
     // Variance vs Baseline Finish (set via Timelinea > Set Baseline): positive
     // = running late, negative = ahead of schedule. Blank until a baseline exists.
@@ -405,7 +429,11 @@ function calculateSchedule() {
     sheet.getRange(t.row, COL.HAS_ISSUE).setValue(!!openIssueTaskIds[t.id + '::' + t.name]);
   });
 
-  updateResourceSheet_(ss, resourceRows, tasks);
+  // Only leaf tasks, not summary rows — a summary's Assigned To is now a
+  // merged display of its children's names (see computeRollups_), and
+  // counting it too would double the Total Days/Total Pay attributed to
+  // each person on the Resources sheet.
+  updateResourceSheet_(ss, resourceRows, leafTasks);
   updateSettingsTotals_(ss, tasks);
 
   if (Object.keys(unknownNames).length) {
