@@ -388,7 +388,10 @@ function updateSettingsTotals_(ss, tasks, settings) {
   var deadlineVal = sheet.getRange(SETTINGS.PROJECT_DEADLINE).getValue();
   var statusCell = sheet.getRange(SETTINGS.DEADLINE_STATUS);
   if (!(deadlineVal instanceof Date)) {
-    statusCell.setValue('(isi Deadline Project di atas untuk melihat status)');
+    // Blank rather than an explanatory message — reported as reading like an
+    // error message sitting in a data cell. Blank is unambiguous: nothing to
+    // compare yet.
+    statusCell.setValue('');
     return;
   }
   var deadline = stripTime_(deadlineVal);

@@ -41,7 +41,11 @@ var TASKS_HEADER = [
 
 var TASKS_LAST_COL = 19;   // column S
 var FROZEN_COLS = 2;       // only ID + Task Name — leaves room for the Gantt chart on screen
-var GANTT_START_COL = 21;  // column U (leaves column T as a spacer)
+var ROW_ACTION_COL = 20;   // column T (the old Gantt spacer) — per-row "+ / -" control, see handleRowAction_
+var GANTT_START_COL = 21;  // column U
+
+var ROW_ACTION_ADD = '+ Tambah baris';
+var ROW_ACTION_DELETE = '- Hapus baris';
 
 // Issues sheet columns (1-indexed) — a running problem/lessons-learned log,
 // linked to Tasks by ID but never cleared by "Mulai Project Baru", since the
