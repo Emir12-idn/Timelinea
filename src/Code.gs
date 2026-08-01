@@ -22,6 +22,11 @@ function onOpen() {
     .addItem('Recalculate Schedule', 'runCalculateSchedule')
     .addItem('Refresh Gantt Chart', 'runDrawGanttChart')
     .addSeparator()
+    .addItem('Print: Sembunyikan Kolom Kerja', 'hideColumnsForPrint')
+    .addItem('Print: Tampilkan Semua Kolom Lagi', 'showAllColumns')
+    .addSeparator()
+    .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings')
+    .addSeparator()
     .addItem('Set Baseline (Simpan Rencana Awal)', 'setBaseline')
     .addSeparator()
     .addItem('Tandai Project Selesai (Kunci)', 'markProjectFinished')
@@ -52,6 +57,31 @@ function runDrawGanttChart() {
   }
 }
 
+/**
+ * Hides the "working" columns (Predecessors through Ada Masalah?) so the
+ * Tasks sheet prints as a clean ID/Task Name/Level/Duration/Start/Finish
+ * list plus the Gantt chart — the scheduling internals (predecessor syntax,
+ * cost figures, critical/slack flags, baseline/variance, issue flag) are
+ * meant for working in the app, not for handing to a client or field crew.
+ * Only hides column width (nothing is deleted or cleared); Timelinea >
+ * Print: Tampilkan Semua Kolom Lagi reverses it.
+ */
+function hideColumnsForPrint() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  if (!sheet) { SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.'); return; }
+  sheet.hideColumns(COL.PREDECESSORS, TASKS_LAST_COL - COL.PREDECESSORS + 1);
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    'Kolom Predecessors s/d Ada Masalah? disembunyikan. Pakai Timelinea > Print: Tampilkan Semua Kolom Lagi untuk mengembalikan.',
+    'Timelinea', 6);
+}
+
+function showAllColumns() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  if (!sheet) { SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.'); return; }
+  sheet.showColumns(COL.PREDECESSORS, TASKS_LAST_COL - COL.PREDECESSORS + 1);
+  SpreadsheetApp.getActiveSpreadsheet().toast('Semua kolom ditampilkan lagi.', 'Timelinea', 4);
+}
+
 function showAbout() {
   SpreadsheetApp.getUi().alert(
     'Timelinea',
@@ -64,6 +94,10 @@ function showAbout() {
     'sheet "Resources" — gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sana.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
+    'Kolom Start/Finish/Planned Cost/Actual Cost/Critical/Slack dihitung otomatis dan akan selalu ditimpa\n' +
+    'ulang — Google Sheets akan memberi peringatan kalau Anda mencoba mengeditnya manual.\n' +
+    'Mau print sheet Tasks untuk klien? Pakai Timelinea > Print: Sembunyikan Kolom Kerja untuk menyembunyikan\n' +
+    'kolom internal (Predecessors s/d Ada Masalah?) sementara, lalu Print: Tampilkan Semua Kolom Lagi setelahnya.\n' +
     'Selesai satu project? Pakai Timelinea > Mulai Project Baru untuk mengarsipkan (mengunci) data lama\n' +
     'dan mengosongkan Tasks untuk project berikutnya — tanpa perlu bikin Sheet baru. Arsip lama tetap bisa\n' +
     'dilihat & diprint lewat Timelinea > Lihat Arsip Project, tapi tidak bisa diedit lagi.\n' +
@@ -353,7 +387,11 @@ function setupTasksSheet_(ss) {
   sheet.getRange(2, COL.START, 500, 1).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(2, COL.FINISH, 500, 1).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(2, COL.PCT_COMPLETE, 500, 1).setNumberFormat('0.0"%"');
-  sheet.getRange(2, COL.COST_RATE, 500, 1).setNumberFormat('"Rp"#,##0');
+  // Third clause (zero) is blank on purpose: Cost/Day is deliberately left
+  // at 0 for tasks whose labor cost already comes from a matched Resources
+  // entry (see the sample data comment below) — showing literal "Rp0" for
+  // that reads as a data-entry mistake rather than the intentional case it is.
+  sheet.getRange(2, COL.COST_RATE, 500, 1).setNumberFormat('"Rp"#,##0;-"Rp"#,##0;""');
   sheet.getRange(2, COL.PLANNED_COST, 500, 1).setNumberFormat('"Rp"#,##0');
   sheet.getRange(2, COL.ACTUAL_COST, 500, 1).setNumberFormat('"Rp"#,##0');
   sheet.getRange(2, COL.MILESTONE, 500, 1).insertCheckboxes();
@@ -401,6 +439,50 @@ function setupTasksSheet_(ss) {
       .setRanges([dataRange])
       .build()
   ]);
+
+  applyAutoColumnWarnings_(sheet);
+}
+
+var AUTO_COL_PROTECTION_DESC_ = 'Timelinea: kolom otomatis (dihitung ulang tiap Recalculate)';
+
+/**
+ * Start/Finish/Planned Cost/Actual Cost/Critical/Slack are all fully
+ * computed by calculateSchedule() and overwritten on every recalculation —
+ * editing them manually does nothing lasting, which is especially
+ * confusing for Critical, since it's rendered as a tappable checkbox with
+ * no visual sign it's not a real input (reported: toggling it "doesn't
+ * work", i.e. it silently reverts on the next recalc). A warning-only
+ * protection can't block the edit — this sheet has to stay editable for its
+ * actual inputs, and Google Sheets doesn't let a script protect a range
+ * from just some editors anyway — but it does make Sheets show an "are you
+ * sure you want to edit this?" prompt before the edit lands, which is
+ * enough to explain the behavior at the moment it'd otherwise look broken.
+ * Removes any previous copies of this same protection first so re-running
+ * Initialize doesn't pile up duplicates.
+ */
+function applyAutoColumnWarnings_(sheet) {
+  sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) {
+    if (p.getDescription() === AUTO_COL_PROTECTION_DESC_) p.remove();
+  });
+  [COL.START, COL.FINISH, COL.PLANNED_COST, COL.ACTUAL_COST, COL.CRITICAL, COL.SLACK].forEach(function (col) {
+    sheet.getRange(2, col, 498, 1).protect()
+      .setDescription(AUTO_COL_PROTECTION_DESC_)
+      .setWarningOnly(true);
+  });
+}
+
+/**
+ * Re-applies the warning protection above to an already-initialized Tasks
+ * sheet, without touching any data — for sheets set up before this feature
+ * existed (re-running Initialize would work too, but wipes Tasks data).
+ */
+function refreshAutoColumnWarnings() {
+  var ui = SpreadsheetApp.getUi();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  if (!sheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
+  applyAutoColumnWarnings_(sheet);
+  ui.alert('Selesai. Sekarang mengedit Start/Finish/Planned Cost/Actual Cost/Critical/Slack secara manual akan ' +
+    'memunculkan peringatan dari Google Sheets sebelum diedit — kolom-kolom itu tetap dihitung ulang otomatis.');
 }
 
 /**
@@ -447,7 +529,7 @@ function formatNewTaskRow_(sheet, row) {
   sheet.getRange(row, COL.START).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(row, COL.FINISH).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(row, COL.PCT_COMPLETE).setValue(0).setNumberFormat('0.0"%"');
-  sheet.getRange(row, COL.COST_RATE).setValue(0).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(row, COL.COST_RATE).setValue(0).setNumberFormat('"Rp"#,##0;-"Rp"#,##0;""');
   sheet.getRange(row, COL.PLANNED_COST).setNumberFormat('"Rp"#,##0');
   sheet.getRange(row, COL.ACTUAL_COST).setNumberFormat('"Rp"#,##0');
   sheet.getRange(row, COL.MILESTONE).insertCheckboxes().setValue(false);
