@@ -66,7 +66,7 @@ Alternatif: gunakan [`clasp`](https://github.com/google/clasp) — file `src/app
 ## Catatan desain
 
 - Perhitungan jalur kritis (slack) menganggap semua dependency sebagai Finish-to-Start dengan lag 0 untuk kesederhanaan — tanggal Start/Finish tetap menghormati tipe dependency asli (FS/SS/FF/SF) sepenuhnya, hanya nilai slack untuk link non-FS yang merupakan aproksimasi.
-- Level harus naik tepat +1 per tingkat nesting (tidak boleh loncat, mis. dari Level 0 langsung ke Level 2) agar struktur induk/anak terbaca benar.
+- Level tidak harus naik tepat +1 — kalau ada baris Level 0 diikuti langsung Level 2 (loncat, tanpa Level 1 di antaranya), Timelinea tetap mengenali baris Level 2 itu sebagai anak dari baris Level 0 di atasnya.
 - Gantt chart dibatasi 400 kolom hari (mode harian) atau 260 kolom minggu (mode mingguan, ~5 tahun) agar tetap dalam batas ukuran Google Sheets; proyek yang lebih panjang perlu dipecah menjadi beberapa fase.
 - Sheet `Resources` bersifat opsional secara teknis (kalau belum ada, semua Cost/Day tetap jalan tapi gaji dihitung 0) — tapi otomatis dibuat oleh Initialize, dan bisa ditambahkan kapan saja lewat menu tanpa perlu reset Tasks/Settings.
 - Arsip project (`.tla`) dienkripsi dengan kunci yang sebagian tersimpan langsung di kode `Archive.gs` (`ARCHIVE_APP_SECRET`). Ini cukup untuk mencegah orang awam membuka/menyalin data lama di luar Timelinea, tapi **bukan** proteksi terhadap orang yang cukup paham untuk membuka editor Apps Script dan membaca kode sumbernya sendiri. **Ganti nilai `ARCHIVE_APP_SECRET` ke string acak baru sebelum mendistribusikan/menjual salinan** — jangan pakai nilai bawaan dari repo ini. Gunakan `scripts/deploy.sh` (lihat bagian Instalasi) supaya secret asli tidak pernah tersimpan di file yang di-commit ke git.

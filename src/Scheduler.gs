@@ -154,19 +154,31 @@ function updateResourceSheet_(ss, resourceRows, tasks) {
 
 /**
  * Determines each task's direct children from the Level column (a task's
- * children are the contiguous run of following rows at exactly level+1,
- * stopping at the first row whose level is <= its own). A task with any
- * children is a summary task and gets excluded from CPM scheduling —
- * its Start/Finish/Duration/% Complete/Cost are rolled up instead.
+ * children are the contiguous run of following rows at the depth of the row
+ * immediately after it, stopping at the first row whose level is <= its
+ * own). A task with any children is a summary task and gets excluded from
+ * CPM scheduling — its Start/Finish/Duration/% Complete/Cost are rolled up
+ * instead.
+ *
+ * Deliberately tolerant of a Level "skip" (e.g. a Level 0 row followed
+ * directly by a Level 2 subtask, with no Level 1 row in between) — the
+ * child depth is whatever level actually follows, not forced to be
+ * exactly +1. Without this, a single off-by-one in the Level column makes
+ * the parent silently fail to register as a summary at all (isSummary
+ * stays false), so its Start/Finish/% Complete/Cost never roll up from the
+ * subtasks — a real bug reported against the strict "+1 only" version.
  */
 function buildOutline_(tasks) {
   tasks.forEach(function (t, i) {
     var children = [];
-    var childLevel = t.level + 1;
-    for (var j = i + 1; j < tasks.length; j++) {
-      var u = tasks[j];
-      if (u.level <= t.level) break;
-      if (u.level === childLevel) children.push(u);
+    var next = tasks[i + 1];
+    if (next && next.level > t.level) {
+      var childLevel = next.level;
+      for (var j = i + 1; j < tasks.length; j++) {
+        var u = tasks[j];
+        if (u.level <= t.level) break;
+        if (u.level === childLevel) children.push(u);
+      }
     }
     t.children = children;
     t.isSummary = children.length > 0;
