@@ -100,6 +100,29 @@ function readResourceRows_(ss) {
 }
 
 /**
+ * Keys of tasks (id + name, since Task IDs restart from 1 after every
+ * "Mulai Project Baru" and could otherwise collide with an unrelated task
+ * from a previous project) that have at least one Open issue logged against
+ * them. Optional — returns {} if the Issues sheet doesn't exist.
+ */
+function readOpenIssueTaskIds_(ss) {
+  var sheet = ss.getSheetByName(ISSUES_SHEET);
+  if (!sheet) return {};
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return {};
+  var taskIds = sheet.getRange(2, ISSUES_COL.TASK_ID, lastRow - 1, 1).getValues();
+  var taskNames = sheet.getRange(2, ISSUES_COL.TASK_NAME, lastRow - 1, 1).getValues();
+  var statuses = sheet.getRange(2, ISSUES_COL.STATUS, lastRow - 1, 1).getValues();
+  var openKeys = {};
+  taskIds.forEach(function (row, i) {
+    var id = row[0];
+    if (id === '' || id === null) return;
+    if (statuses[i][0] === 'Open') openKeys[Number(id) + '::' + String(taskNames[i][0] || '')] = true;
+  });
+  return openKeys;
+}
+
+/**
  * Writes each resource's assigned task list, total allocated days, and
  * total pay (rate/day × total days) back into the Resources sheet.
  */
@@ -350,6 +373,8 @@ function calculateSchedule() {
 
   computeRollups_(tasks, settings);
 
+  var openIssueTaskIds = readOpenIssueTaskIds_(ss);
+
   tasks.forEach(function (t) {
     sheet.getRange(t.row, COL.START).setValue(t.start);
     sheet.getRange(t.row, COL.FINISH).setValue(t.finish);
@@ -365,6 +390,7 @@ function calculateSchedule() {
     // = running late, negative = ahead of schedule. Blank until a baseline exists.
     sheet.getRange(t.row, COL.VARIANCE).setValue(
       t.baselineFinish ? signedWorkdaysBetween_(t.baselineFinish, t.finish, settings.skipWeekends, settings.holidaySet) : '');
+    sheet.getRange(t.row, COL.HAS_ISSUE).setValue(!!openIssueTaskIds[t.id + '::' + t.name]);
   });
 
   updateResourceSheet_(ss, resourceRows, tasks);

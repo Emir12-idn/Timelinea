@@ -15,6 +15,9 @@ function onOpen() {
     .addItem('Add Resource Row', 'addResourceRow')
     .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
     .addSeparator()
+    .addItem('Catat Masalah (Issue Log)', 'logIssue')
+    .addItem('Setup / Reset Issues Sheet', 'addIssuesSheet')
+    .addSeparator()
     .addItem('Recalculate Schedule', 'runCalculateSchedule')
     .addItem('Refresh Gantt Chart', 'runDrawGanttChart')
     .addSeparator()
@@ -59,7 +62,10 @@ function showAbout() {
     'dan mengosongkan Tasks untuk project berikutnya — tanpa perlu bikin Sheet baru. Arsip lama tetap bisa\n' +
     'dilihat & diprint lewat Timelinea > Lihat Arsip Project, tapi tidak bisa diedit lagi.\n' +
     'Pakai Timelinea > Set Baseline untuk menyimpan Start/Finish saat ini sebagai rencana awal — kolom\n' +
-    'Variance akan menunjukkan berapa hari project melenceng (lebih/kurang) dari rencana itu.',
+    'Variance akan menunjukkan berapa hari project melenceng (lebih/kurang) dari rencana itu.\n' +
+    'Ada masalah di sebuah task? Pilih baris task-nya lalu Timelinea > Catat Masalah — dicatat di sheet\n' +
+    'Issues (kapan terjadi, penyebab, penyelesaian) supaya tidak terulang di project berikutnya. Sheet\n' +
+    'Issues tidak ikut terhapus saat Mulai Project Baru.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -82,6 +88,7 @@ function initializeTimelineaHeadless() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   setupSettingsSheet_(ss);
   setupResourcesSheet_(ss);
+  if (!ss.getSheetByName(ISSUES_SHEET)) setupIssuesSheet_(ss); // preserved across re-Initialize; see setupIssuesSheet_
   setupTasksSheet_(ss);
   drawGanttChart();
 }
@@ -185,6 +192,117 @@ function addResourceRow() {
   sheet.setActiveSelection(sheet.getRange(newRow, RESOURCES_COL.NAME));
 }
 
+/**
+ * The Issues sheet is a running problem/lessons-learned log. It is created
+ * once and deliberately left alone by Initialize (if it already exists) and
+ * by "Mulai Project Baru" — the point is to remember what went wrong across
+ * every project, not just the current one.
+ */
+function setupIssuesSheet_(ss) {
+  var sheet = ss.getSheetByName(ISSUES_SHEET);
+  if (sheet) ss.deleteSheet(sheet);
+  sheet = ss.insertSheet(ISSUES_SHEET);
+
+  sheet.getRange(1, 1, 1, ISSUES_HEADER.length).setValues([ISSUES_HEADER])
+    .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 28);
+  sheet.setFrozenRows(1);
+
+  sheet.getRange(2, ISSUES_COL.DATE, 500, 1).setNumberFormat('yyyy-MM-dd');
+  sheet.getRange(2, ISSUES_COL.STATUS, 500, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(['Open', 'Resolved'], true).setAllowInvalid(false).build());
+
+  var widths = [40, 65, 200, 110, 260, 200, 260, 90];
+  widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  var dataRange = sheet.getRange(2, 1, 498, ISSUES_HEADER.length);
+  var statusRange = sheet.getRange(2, ISSUES_COL.STATUS, 498, 1);
+  sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo('Open')
+      .setBackground(COLOR.ISSUE_OPEN_BG).setFontColor(COLOR.ISSUE_OPEN_TEXT).setBold(true)
+      .setRanges([statusRange])
+      .build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=ISEVEN(ROW())')
+      .setBackground(COLOR.ZEBRA_ROW_BG)
+      .setRanges([dataRange])
+      .build()
+  ]);
+}
+
+/** Creates (or resets) just the Issues sheet, without touching Tasks/Settings/Resources. */
+function addIssuesSheet() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(ISSUES_SHEET)) {
+    var response = ui.alert(
+      'Setup Issues Sheet',
+      'Sheet "Issues" sudah ada. Ini akan MENGHAPUS semua catatan masalah yang sudah ada di sana. Lanjutkan?',
+      ui.ButtonSet.YES_NO);
+    if (response !== ui.Button.YES) return;
+  }
+  setupIssuesSheet_(ss);
+}
+
+function nextIssueId_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var ids = lastRow >= 2
+    ? sheet.getRange(2, ISSUES_COL.ID, lastRow - 1, 1).getValues().flat().filter(function (v) { return v !== ''; })
+    : [];
+  return ids.length ? Math.max.apply(null, ids) + 1 : 1;
+}
+
+/**
+ * Logs a new problem to the Issues sheet — Penyebab/Penyelesaian/Status are
+ * filled in later directly in the sheet, as they're usually not known yet
+ * the moment a problem is first noticed. If a Tasks row is selected when
+ * this runs, Task ID/Name are pre-filled automatically.
+ */
+function logIssue() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var issuesSheet = ss.getSheetByName(ISSUES_SHEET);
+  if (!issuesSheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
+
+  var taskId = '', taskName = '';
+  var activeSheet = ss.getActiveSheet();
+  if (activeSheet.getName() === TASKS_SHEET) {
+    var activeRow = ss.getActiveRange().getRow();
+    if (activeRow >= 2) {
+      taskId = activeSheet.getRange(activeRow, COL.ID).getValue();
+      taskName = activeSheet.getRange(activeRow, COL.NAME).getValue();
+    }
+  }
+
+  var resp = ui.prompt(
+    'Catat Masalah' + (taskName ? ' — ' + taskName : ''),
+    'Deskripsi masalahnya (Penyebab, Penyelesaian, dan Status bisa dilengkapi langsung di sheet Issues setelah ini):',
+    ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  var problem = resp.getResponseText().trim();
+  if (!problem) return;
+
+  var newRow = issuesSheet.getLastRow() + 1;
+  issuesSheet.getRange(newRow, ISSUES_COL.ID).setValue(nextIssueId_(issuesSheet));
+  issuesSheet.getRange(newRow, ISSUES_COL.TASK_ID).setValue(taskId);
+  issuesSheet.getRange(newRow, ISSUES_COL.TASK_NAME).setValue(taskName);
+  issuesSheet.getRange(newRow, ISSUES_COL.DATE).setValue(stripTime_(new Date())).setNumberFormat('yyyy-MM-dd');
+  issuesSheet.getRange(newRow, ISSUES_COL.PROBLEM).setValue(problem);
+  issuesSheet.getRange(newRow, ISSUES_COL.STATUS).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(['Open', 'Resolved'], true).setAllowInvalid(false).build())
+    .setValue('Open');
+
+  ss.setActiveSheet(issuesSheet);
+  issuesSheet.setActiveSelection(issuesSheet.getRange(newRow, ISSUES_COL.CAUSE));
+
+  try { calculateSchedule(); } catch (err) { /* the issue is logged either way; the flag just won't show yet */ }
+
+  ui.alert('Masalah dicatat di sheet Issues' + (taskName ? ' untuk task "' + taskName + '"' : '') +
+    '. Lengkapi Penyebab dan Penyelesaian di sana, lalu ubah Status jadi Resolved kalau sudah selesai.');
+}
+
 function setupTasksSheet_(ss) {
   var sheet = ss.getSheetByName(TASKS_SHEET);
   if (sheet) ss.deleteSheet(sheet);
@@ -203,16 +321,16 @@ function setupTasksSheet_(ss) {
   // Resources entry — their Planned Cost comes from that resource's
   // Rate/Day instead, so the two don't double up.
   var sample = [
-    [1, 'Project Kickoff', 0, 0, '', '', '', 0, '', 0, '', '', true, '', '', '', '', ''],
-    [2, 'Phase 1: Discovery', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', ''],
-    [3, 'Requirements Gathering', 1, 3, '', '', '1FS', 0, 'Analyst', 0, '', '', false, '', '', '', '', ''],
-    [4, 'Design', 1, 5, '', '', '3FS', 0, 'Designer', 0, '', '', false, '', '', '', '', ''],
-    [5, 'Phase 2: Build & Test', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', ''],
-    [6, 'Development', 1, '', '', '', '', '', '', '', '', '', false, '', '', '', '', ''],
-    [7, 'Backend', 2, 7, '', '', '4FS', 0, 'Backend Dev', 0, '', '', false, '', '', '', '', ''],
-    [8, 'Frontend', 2, 6, '', '', '4FS', 0, 'Frontend Dev', 0, '', '', false, '', '', '', '', ''],
-    [9, 'Testing', 1, 4, '', '', '7FS,8FS', 0, 'QA,PM', 0, '', '', false, '', '', '', '', ''],
-    [10, 'Launch', 0, 0, '', '', '9FS', 0, 'PM', 0, '', '', true, '', '', '', '', '']
+    [1, 'Project Kickoff', 0, 0, '', '', '', 0, '', 0, '', '', true, '', '', '', '', '', false],
+    [2, 'Phase 1: Discovery', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [3, 'Requirements Gathering', 1, 3, '', '', '1FS', 0, 'Analyst', 0, '', '', false, '', '', '', '', '', false],
+    [4, 'Design', 1, 5, '', '', '3FS', 0, 'Designer', 0, '', '', false, '', '', '', '', '', false],
+    [5, 'Phase 2: Build & Test', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [6, 'Development', 1, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [7, 'Backend', 2, 7, '', '', '4FS', 0, 'Backend Dev', 0, '', '', false, '', '', '', '', '', false],
+    [8, 'Frontend', 2, 6, '', '', '4FS', 0, 'Frontend Dev', 0, '', '', false, '', '', '', '', '', false],
+    [9, 'Testing', 1, 4, '', '', '7FS,8FS', 0, 'QA,PM', 0, '', '', false, '', '', '', '', '', false],
+    [10, 'Launch', 0, 0, '', '', '9FS', 0, 'PM', 0, '', '', true, '', '', '', '', '', false]
   ];
   sheet.getRange(2, 1, sample.length, TASKS_HEADER.length).setValues(sample);
 
@@ -229,8 +347,9 @@ function setupTasksSheet_(ss) {
   sheet.getRange(2, COL.BASELINE_START, 500, 1).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(2, COL.BASELINE_FINISH, 500, 1).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(2, COL.VARIANCE, 500, 1).setNumberFormat('+0;-0;0');
+  sheet.getRange(2, COL.HAS_ISSUE, 500, 1).insertCheckboxes();
 
-  var widths = [40, 220, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65, 95, 95, 75];
+  var widths = [40, 220, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65, 95, 95, 75, 90];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
   sheet.getRange(2, COL.PCT_COMPLETE, 500, 1).setDataValidation(
@@ -246,9 +365,17 @@ function setupTasksSheet_(ss) {
   sheet.getRange(1, TASKS_LAST_COL, 500, 1)
     .setBorder(null, null, null, true, null, null, COLOR.FROZEN_DIVIDER, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
+  // Priority order matters: the FIRST rule that matches a cell wins. A late
+  // task should out-rank everything else (that's the one thing that should
+  // never blend into the calm background), critical path is secondary, and
+  // zebra striping only fills in where neither applies.
   var dataRange = sheet.getRange(2, 1, 498, TASKS_LAST_COL);
-  var varianceRange = sheet.getRange(2, COL.VARIANCE, 498, 1);
   sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND(ISNUMBER($' + colLetter_(COL.VARIANCE) + '2), $' + colLetter_(COL.VARIANCE) + '2>0)')
+      .setBackground(COLOR.VARIANCE_LATE_BG).setFontColor(COLOR.VARIANCE_LATE_TEXT).setBold(true)
+      .setRanges([dataRange])
+      .build(),
     SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=$' + colLetter_(COL.CRITICAL) + '2=TRUE')
       .setBackground(COLOR.CRITICAL_ROW_BG)
@@ -258,11 +385,6 @@ function setupTasksSheet_(ss) {
       .whenFormulaSatisfied('=ISEVEN(ROW())')
       .setBackground(COLOR.ZEBRA_ROW_BG)
       .setRanges([dataRange])
-      .build(),
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($' + colLetter_(COL.VARIANCE) + '2), $' + colLetter_(COL.VARIANCE) + '2>0)')
-      .setBackground(COLOR.VARIANCE_LATE_BG).setFontColor(COLOR.VARIANCE_LATE_TEXT)
-      .setRanges([varianceRange])
       .build()
   ]);
 }
@@ -319,6 +441,7 @@ function formatNewTaskRow_(sheet, row) {
   sheet.getRange(row, COL.BASELINE_START).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(row, COL.BASELINE_FINISH).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(row, COL.VARIANCE).setNumberFormat('+0;-0;0');
+  sheet.getRange(row, COL.HAS_ISSUE).insertCheckboxes().setValue(false);
 }
 
 /**
