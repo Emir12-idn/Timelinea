@@ -27,8 +27,7 @@ function onOpen() {
     .addItem('Setup / Reset Pembelian Bahan Sheet', 'addPurchasesSheet')
     .addItem('Setup / Reset Issues Sheet (HAPUS riwayat masalah)', 'addIssuesSheet')
     .addSeparator()
-    .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings')
-    .addItem('Aktifkan Kolom +/↓/- (Tambah Sejajar/Subtask/Hapus)', 'refreshRowActionColumn');
+    .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings');
 
   ui.createMenu('Timelinea')
     .addItem('Add Task Row', 'addTaskRow')
@@ -90,21 +89,20 @@ function lastTaskRow_(sheet) {
 }
 
 /**
- * Hides the "+/↓/-" control column and the working columns (Predecessors
- * through Ada Masalah? — predecessor syntax, cost figures, critical/slack
- * flags, baseline/variance, issue flag) so the Tasks sheet prints as a
- * clean ID/Task Name/Level/Duration/Start/Finish list plus the Gantt chart,
- * meant for a client or field crew. Also hides every row past the last
- * actual task — rows are pre-formatted with checkboxes/validation hundreds
- * of rows ahead for smooth data entry, and without this a printout would
- * show a long tail of empty-looking rows that still render checkboxes.
- * Only hides — nothing is deleted or cleared; Timelinea > Print: Tampilkan
- * Semua Lagi reverses both.
+ * Hides the working columns (Predecessors through Ada Masalah? —
+ * predecessor syntax, cost figures, critical/slack flags, baseline/
+ * variance, issue flag) so the Tasks sheet prints as a clean ID/Task
+ * Name/Level/Duration/Start/Finish list plus the Gantt chart, meant for a
+ * client or field crew. Also hides every row past the last actual task —
+ * rows are pre-formatted with checkboxes/validation hundreds of rows ahead
+ * for smooth data entry, and without this a printout would show a long
+ * tail of empty-looking rows that still render checkboxes. Only hides —
+ * nothing is deleted or cleared; Timelinea > Print: Tampilkan Semua Lagi
+ * reverses both.
  */
 function hideColumnsForPrint() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) { SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.'); return; }
-  sheet.hideColumns(ROW_ACTION_COL, 1);
   sheet.hideColumns(COL.PREDECESSORS, TASKS_LAST_COL - COL.PREDECESSORS + 1);
 
   var lastTask = lastTaskRow_(sheet);
@@ -119,7 +117,6 @@ function hideColumnsForPrint() {
 function showAllColumns() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) { SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.'); return; }
-  sheet.showColumns(ROW_ACTION_COL, 1);
   sheet.showColumns(COL.PREDECESSORS, TASKS_LAST_COL - COL.PREDECESSORS + 1);
   sheet.showRows(1, sheet.getMaxRows());
   SpreadsheetApp.getActiveSpreadsheet().toast('Semua kolom dan baris ditampilkan lagi.', 'Timelinea', 4);
@@ -133,16 +130,13 @@ function showAbout() {
     'Timelinea > Add Task Sejajar menambah baris baru SETARA (level sama) di bawah baris yang dipilih; ' +
     'Timelinea > Add Sub-task menambah baris satu level LEBIH DALAM (anak) dari baris yang dipilih.\n' +
     'Task yang punya subtask otomatis jadi "summary": Start/Finish/% Complete/Cost-nya dirangkum dari anak-anaknya.\n' +
-    'Untuk isi "Assigned To" (bisa lebih dari satu orang per task), pilih baris task-nya lalu klik "👤" di kolom\n' +
-    '"+ / ↓ / -" (atau lewat Timelinea > Pilih Assigned To) — muncul pop-up centang nama dari sheet "Resources".\n' +
-    'Gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sheet Resources.\n' +
+    'Untuk isi "Assigned To" (bisa lebih dari satu orang per task), pilih baris task-nya lalu Timelinea > Pilih\n' +
+    'Assigned To — muncul pop-up centang nama dari sheet "Resources". Gaji tiap orang (Rate/Day × total hari\n' +
+    'kerjanya) otomatis terhitung di sheet Resources.\n' +
     'Beli bahan/barang untuk suatu task? Catat di sheet "Pembelian Bahan" (Timelinea > Tambah Pembelian Bahan) —\n' +
     'pilih task-nya dari dropdown, isi Keterangan dan Harga; totalnya otomatis masuk ke Planned Cost task itu.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
-    'Tidak perlu buka menu Timelinea tiap mau tambah/hapus baris — klik sel di kolom "+ / ↓ / -" (tepat di\n' +
-    'sebelah Task Name, selalu kelihatan walau di-scroll): "+" = task baru sejajar, "↓" = subtask (anak, satu\n' +
-    'level lebih dalam), "-" = hapus baris itu (akan ada konfirmasi dulu).\n' +
     'Cost/Day, Planned Cost, dan Actual Cost disembunyikan secara default (harga modal tidak boleh bocor ke\n' +
     'klien) — pakai Timelinea > Print: Tampilkan Semua Lagi kalau perlu melihat/mengeditnya.\n' +
     'Kolom Start/Finish/Planned Cost/Actual Cost/Critical/Slack dihitung otomatis dan akan selalu ditimpa\n' +
@@ -573,16 +567,16 @@ function setupTasksSheet_(ss) {
   // Assigned To already matches a Resources entry — their Planned Cost comes
   // from that resource's Rate/Day instead, so the two don't double up.
   var sample = [
-    [1, 'Kick-off Proyek', '', 0, 0, '', '', '', 0, '', 0, '', '', true, '', '', '', '', '', false],
-    [2, 'Tahap 1: Survey & Bahan', '', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
-    [3, 'Survey Lokasi & Ukur', '', 1, 3, '', '', '1FS', 0, 'Mandor Joko', 0, '', '', false, '', '', '', '', '', false],
-    [4, 'Beli Bahan Besi/Baja', '', 1, 5, '', '', '3FS', 0, 'Mandor Joko', 0, '', '', false, '', '', '', '', '', false],
-    [5, 'Tahap 2: Fabrikasi & Pasang', '', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
-    [6, 'Fabrikasi', '', 1, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
-    [7, 'Potong & Rangka Besi', '', 2, 7, '', '', '4FS', 0, 'Subur', 0, '', '', false, '', '', '', '', '', false],
-    [8, 'Las Sambungan', '', 2, 6, '', '', '4FS', 0, 'Ade', 0, '', '', false, '', '', '', '', '', false],
-    [9, 'Pasang di Lokasi & Finishing Cat', '', 1, 4, '', '', '7FS,8FS', 0, 'Subur,Budi', 0, '', '', false, '', '', '', '', '', false],
-    [10, 'Serah Terima ke Klien', '', 0, 0, '', '', '9FS', 0, 'Mandor Joko', 0, '', '', true, '', '', '', '', '', false]
+    [1, 'Kick-off Proyek', 0, 0, '', '', '', 0, '', 0, '', '', true, '', '', '', '', '', false],
+    [2, 'Tahap 1: Survey & Bahan', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [3, 'Survey Lokasi & Ukur', 1, 3, '', '', '1FS', 0, 'Mandor Joko', 0, '', '', false, '', '', '', '', '', false],
+    [4, 'Beli Bahan Besi/Baja', 1, 5, '', '', '3FS', 0, 'Mandor Joko', 0, '', '', false, '', '', '', '', '', false],
+    [5, 'Tahap 2: Fabrikasi & Pasang', 0, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [6, 'Fabrikasi', 1, '', '', '', '', '', '', '', '', '', false, '', '', '', '', '', false],
+    [7, 'Potong & Rangka Besi', 2, 7, '', '', '4FS', 0, 'Subur', 0, '', '', false, '', '', '', '', '', false],
+    [8, 'Las Sambungan', 2, 6, '', '', '4FS', 0, 'Ade', 0, '', '', false, '', '', '', '', '', false],
+    [9, 'Pasang di Lokasi & Finishing Cat', 1, 4, '', '', '7FS,8FS', 0, 'Subur,Budi', 0, '', '', false, '', '', '', '', '', false],
+    [10, 'Serah Terima ke Klien', 0, 0, '', '', '9FS', 0, 'Mandor Joko', 0, '', '', true, '', '', '', '', '', false]
   ];
   sheet.getRange(2, 1, sample.length, TASKS_HEADER.length).setValues(sample);
 
@@ -605,7 +599,7 @@ function setupTasksSheet_(ss) {
   sheet.getRange(2, COL.VARIANCE, 500, 1).setNumberFormat('+0;-0;0');
   sheet.getRange(2, COL.HAS_ISSUE, 500, 1).insertCheckboxes();
 
-  var widths = [40, 220, 50, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65, 95, 95, 75, 90];
+  var widths = [40, 220, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65, 95, 95, 75, 90];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
   sheet.getRange(2, COL.PCT_COMPLETE, 500, 1).setDataValidation(
@@ -645,7 +639,6 @@ function setupTasksSheet_(ss) {
   ]);
 
   applyAutoColumnWarnings_(sheet);
-  applyRowActionColumn_(sheet);
 
   // Cost/Day, Planned Cost, Actual Cost hidden from the start, not just on
   // demand before printing — reported concern: sending/printing a work
@@ -658,62 +651,12 @@ function setupTasksSheet_(ss) {
 }
 
 /**
- * Sets up the "+/↓/-" per-row control in ROW_ACTION_COL — placed right after
- * Task Name and frozen (see FROZEN_COLS), not at the far end of the sheet:
- * putting it past every other column meant scrolling across the whole sheet
- * just to reach it, which defeated the point of a quick per-row control. A
- * dropdown, not checkboxes, since it needs four distinct actions in one
- * column: + (sibling, same level), ↓ (subtask, one level deeper), - (delete,
- * with confirmation), 👤 (opens the Assigned To picker — the only mechanism
- * for that field; a native per-cell dropdown used to also exist but could
- * only pick one name while the picker supports several, so having both was
- * two ways to do the same thing). Values are bare symbols, not words, so
- * the column stays narrow — see handleRowAction_ (wired from onEdit) for
- * what each one does. setAllowInvalid(true) so it doesn't hard-block
- * whatever a user types.
- */
-function applyRowActionColumn_(sheet) {
-  sheet.getRange(1, ROW_ACTION_COL).setValue('+ / ↓ / -')
-    .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
-    .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sheet.setColumnWidth(ROW_ACTION_COL, 50);
-  sheet.getRange(2, ROW_ACTION_COL, 498, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation()
-      .requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE, ROW_ACTION_ASSIGN], true)
-      .setAllowInvalid(true).build())
-    .setHorizontalAlignment('center');
-}
-
-/**
- * Adds the "+/↓/-" column to a Tasks sheet that was initialized before this
- * feature existed, without touching any Task data — the same reasoning as
- * Setup / Reset Settings Sheet: picking up a new feature shouldn't require
- * wiping existing work via a full Initialize.
- */
-function refreshRowActionColumn() {
-  var ui = SpreadsheetApp.getUi();
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
-  if (!sheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
-  applyRowActionColumn_(sheet);
-  // Also strips the old single-select Assigned To dropdown if this sheet
-  // was set up before that was replaced by the "👤" picker — otherwise a
-  // sheet initialized before this change keeps both mechanisms around,
-  // exactly the "two ways to do the same thing" this was meant to fix.
-  sheet.getRange(2, COL.RESOURCE, 498, 1).clearDataValidations();
-  ui.alert('Selesai. Kolom "+ / ↓ / -" di sheet Tasks (tepat di sebelah Task Name) sekarang aktif — "+" untuk ' +
-    'task baru selevel, "↓" untuk subtask, "👤" untuk pilih Assigned To (bisa lebih dari satu orang), atau "-" ' +
-    'untuk hapus baris (ada konfirmasi dulu). Dropdown 1-pilihan lama di kolom Assigned To (kalau masih ada) ' +
-    'juga sudah dihapus.');
-}
-
-/**
  * Opens a checkbox picker for Assigned To on the given Tasks row. This is
  * the ONE mechanism for setting Assigned To — there used to also be a
  * native Sheets dropdown on the cell itself, but that could only pick one
  * name at a time while this dialog supports several, so having both was
  * two different ways to do the same thing for no reason; the dropdown was
- * removed. Reachable via the "👤" option in the +/↓/- row-action column, or
- * the Timelinea > Pilih Assigned To menu item for anyone who prefers that.
+ * removed. Reachable via the Timelinea > Pilih Assigned To menu item.
  * Lists every name in Resources as a checkbox, pre-checks whichever are
  * already in the cell, and writes the comma-joined result back on Simpan.
  */
@@ -869,10 +812,6 @@ function formatNewTaskRow_(sheet, row) {
   sheet.getRange(row, COL.BASELINE_FINISH).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(row, COL.VARIANCE).setNumberFormat('+0;-0;0');
   sheet.getRange(row, COL.HAS_ISSUE).insertCheckboxes().setValue(false);
-  sheet.getRange(row, ROW_ACTION_COL).setDataValidation(
-    SpreadsheetApp.newDataValidation()
-      .requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE, ROW_ACTION_ASSIGN], true)
-      .setAllowInvalid(true).build());
 }
 
 /**
@@ -906,18 +845,11 @@ function addTaskRow() {
  * to (mis-)use Add Sub-task, which instead created a Level-2 child of the
  * selected row — a reported point of confusion.
  */
-/** Shared by addSiblingRow() (menu) and handleRowAction_() (the +/- column). */
-function insertSiblingRowAt_(sheet, row) {
-  var level = Number(sheet.getRange(row, COL.LEVEL).getValue()) || 0;
-  var newRow = row + 1;
-  sheet.insertRowAfter(row);
-  sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
-  formatNewTaskRow_(sheet, newRow);
-  sheet.getRange(newRow, COL.LEVEL).setValue(level);
-  sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
-  refreshAfterRowInsert_();
-}
-
+/**
+ * Inserts a new row directly below the currently selected row, at the SAME
+ * Level — for adding another item alongside an existing task/subtask (a
+ * sibling), as opposed to Add Sub-task which nests one level deeper.
+ */
 function addSiblingRow() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) {
@@ -929,84 +861,12 @@ function addSiblingRow() {
     SpreadsheetApp.getUi().alert('Pilih dulu baris task yang levelnya mau disamakan.');
     return;
   }
-  insertSiblingRowAt_(sheet, activeRow);
-}
-
-/**
- * Handles an edit to the ROW_ACTION_COL cell (the "+/↓/-/👤" column next to
- * Task Name) — inline row actions instead of always going through the
- * menu: "+" inserts a same-level sibling right below (mirrors
- * addSiblingRow), "↓" inserts a child one level deeper (mirrors
- * addSubtaskRow), "👤" opens the Assigned To picker for that row, and "-"
- * deletes the row after a confirmation, since that's irreversible and this
- * column is exactly the kind of thing an unfamiliar user could tap by
- * accident. If the confirmation dialog can't be shown for any reason, the
- * row is NOT deleted — never delete data without being sure the user
- * actually confirmed.
- */
-function handleRowAction_(range) {
-  var sheet = range.getSheet();
-  var row = range.getRow();
-  var value = range.getValue();
-
-  if (value === ROW_ACTION_ADD) {
-    range.setValue('');
-    insertSiblingRowAt_(sheet, row);
-    return;
-  }
-
-  if (value === ROW_ACTION_SUBTASK) {
-    range.setValue('');
-    insertSubtaskRowAt_(sheet, row);
-    return;
-  }
-
-  if (value === ROW_ACTION_ASSIGN) {
-    range.setValue('');
-    openAssignDialogForRow_(row);
-    return;
-  }
-
-  if (value === ROW_ACTION_DELETE) {
-    var taskName = sheet.getRange(row, COL.NAME).getValue() || '(tanpa nama)';
-    var level = Number(sheet.getRange(row, COL.LEVEL).getValue()) || 0;
-    var nextLevel = row < sheet.getLastRow() ? (Number(sheet.getRange(row + 1, COL.LEVEL).getValue()) || 0) : -1;
-    var childWarning = nextLevel > level
-      ? '\n\nPeringatan: baris ini punya subtask di bawahnya. Subtask-nya TIDAK ikut terhapus, tapi Level-nya mungkin perlu disesuaikan manual setelah ini.'
-      : '';
-
-    var confirmed = false;
-    try {
-      var ui = SpreadsheetApp.getUi();
-      var response = ui.alert('Hapus Task',
-        'Hapus baris task "' + taskName + '"? Tindakan ini tidak bisa dibatalkan lewat Timelinea (Ctrl+Z Google ' +
-        'Sheets mungkin masih bisa langsung setelahnya).' + childWarning,
-        ui.ButtonSet.YES_NO);
-      confirmed = (response === ui.Button.YES);
-    } catch (err) {
-      confirmed = false; // couldn't confirm safely, so don't delete
-    }
-
-    if (confirmed) {
-      sheet.deleteRow(row);
-      refreshAfterRowInsert_();
-    } else {
-      range.setValue('');
-    }
-    return;
-  }
-
-  range.setValue(''); // any stray value that isn't one of the four options
-}
-
-/** Shared by addSubtaskRow() (menu) and handleRowAction_() (the +/- column). */
-function insertSubtaskRowAt_(sheet, row) {
-  var parentLevel = Number(sheet.getRange(row, COL.LEVEL).getValue()) || 0;
-  var newRow = row + 1;
-  sheet.insertRowAfter(row);
+  var level = Number(sheet.getRange(activeRow, COL.LEVEL).getValue()) || 0;
+  var newRow = activeRow + 1;
+  sheet.insertRowAfter(activeRow);
   sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
   formatNewTaskRow_(sheet, newRow);
-  sheet.getRange(newRow, COL.LEVEL).setValue(parentLevel + 1);
+  sheet.getRange(newRow, COL.LEVEL).setValue(level);
   sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
   refreshAfterRowInsert_();
 }
@@ -1026,5 +886,12 @@ function addSubtaskRow() {
     SpreadsheetApp.getUi().alert('Pilih dulu baris task yang mau diberi subtask.');
     return;
   }
-  insertSubtaskRowAt_(sheet, activeRow);
+  var parentLevel = Number(sheet.getRange(activeRow, COL.LEVEL).getValue()) || 0;
+  var newRow = activeRow + 1;
+  sheet.insertRowAfter(activeRow);
+  sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
+  formatNewTaskRow_(sheet, newRow);
+  sheet.getRange(newRow, COL.LEVEL).setValue(parentLevel + 1);
+  sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
+  refreshAfterRowInsert_();
 }

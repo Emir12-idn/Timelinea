@@ -19,15 +19,6 @@ function onEdit(e) {
     return;
   }
 
-  // The "+/-" per-row control (see applyRowActionColumn_) — a single-cell
-  // pick in ROW_ACTION_COL, handled separately from the recalculation
-  // watch-list below since selecting it isn't itself a scheduling input.
-  if (sheetName === TASKS_SHEET && e.range.getRow() >= 2 && e.range.getColumn() === ROW_ACTION_COL &&
-      e.range.getNumRows() === 1 && e.range.getNumColumns() === 1) {
-    handleRowAction_(e.range);
-    return;
-  }
-
   if (sheetName !== TASKS_SHEET && sheetName !== RESOURCES_SHEET) return;
   if (e.range.getRow() === 1) return; // header row
 
