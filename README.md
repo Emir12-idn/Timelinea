@@ -33,9 +33,11 @@ Ms schedule
 
    Kalau punya [`clasp`](https://github.com/google/clasp) terpasang, jalankan `./scripts/deploy.sh "<secret-acak>"` sekali (menyimpan secret ke `.secrets/`, gitignored) untuk deploy lewat CLI tanpa copy-paste manual dan tanpa risiko secret asli ikut ter-commit.
 4. Simpan, lalu kembali ke Google Sheet dan **refresh halaman**. Menu baru **Timelinea** akan muncul di menu bar (di desktop; lihat catatan mobile di bawah).
-5. Klik **Timelinea > Initialize / Reset Sheets** untuk membuat sheet `Tasks` dan `Settings` beserta data contoh.
+5. Klik **Timelinea > Reset & Setup (hati-hati, ada yang menghapus data) > Initialize / Reset Sheets**, lalu ketik **RESET** saat diminta untuk mengonfirmasi, untuk membuat sheet `Tasks`, `Settings`, dan `Resources` beserta data contoh.
 
 Alternatif: gunakan [`clasp`](https://github.com/google/clasp) — file `src/appsscript.json` dan `.claspignore` di repo ini sudah disiapkan untuk `clasp push` langsung dari folder `src/`.
+
+**Catatan menu**: semua aksi yang menghapus/mereset data (Initialize, Setup/Reset Resources/Settings/Issues) sengaja dikelompokkan di submenu **Timelinea > Reset & Setup (hati-hati, ada yang menghapus data)**, bukan di daftar utama — supaya pengguna yang tidak terlalu familiar dengan komputer (mis. orang tua/staf non-teknis) tidak gampang salah pencet saat sekadar mau menambah task atau mencatat masalah sehari-hari. Initialize / Reset Sheets khususnya minta diketik ulang kata **RESET** (bukan cuma klik Ya) karena ini aksi yang paling merugikan kalau kepencet tidak sengaja.
 
 **Catatan mobile**: menu custom Apps Script (menu "Timelinea") tidak muncul di aplikasi Google Sheets mobile maupun tampilan web mobile-nya — itu keterbatasan Google, bukan bug. Kalau menu tidak kelihatan, jalankan `initializeTimelineaHeadless` sekali langsung dari editor script (`script.google.com/d/<scriptId>/edit` > pilih fungsi di dropdown > Jalankan). Setelah sheet terbentuk, edit sel di Tasks tetap otomatis memicu perhitungan ulang di perangkat apa pun, karena itu jalan lewat trigger edit sel, bukan menu.
 

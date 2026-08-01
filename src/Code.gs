@@ -5,29 +5,43 @@
  * auto-drawn Gantt chart.
  */
 
+/**
+ * Menu layout deliberately keeps every reset/wipe action out of the main
+ * list and behind a single, clearly-labeled submenu — reported concern:
+ * a non-technical user browsing the main Timelinea menu for everyday things
+ * (adding a row, logging an issue) could land on "Initialize / Reset Sheets"
+ * by mistake and lose their Tasks data. The main menu now only has actions
+ * that are either harmless or already guarded by an archive/lock step.
+ * Initialize itself additionally requires typing a confirmation word (see
+ * initializeTimelinea) since a Yes/No dialog alone is too easy to click
+ * through without reading.
+ */
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('Timelinea')
-    .addItem('Initialize / Reset Sheets', 'initializeTimelinea')
+  var ui = SpreadsheetApp.getUi();
+
+  var resetMenu = ui.createMenu('Reset & Setup (hati-hati, ada yang menghapus data)')
+    .addItem('Initialize / Reset Sheets (HAPUS semua Tasks)', 'initializeTimelinea')
     .addSeparator()
+    .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
+    .addItem('Setup / Reset Settings Sheet', 'addSettingsSheet')
+    .addItem('Setup / Reset Issues Sheet (HAPUS riwayat masalah)', 'addIssuesSheet')
+    .addSeparator()
+    .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings');
+
+  ui.createMenu('Timelinea')
     .addItem('Add Task Row', 'addTaskRow')
     .addItem('Add Task Sejajar (level sama, di bawah baris terpilih)', 'addSiblingRow')
     .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
     .addItem('Pilih Assigned To (Multi-pilih)', 'openAssignDialog')
     .addItem('Add Resource Row', 'addResourceRow')
-    .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
-    .addItem('Setup / Reset Settings Sheet', 'addSettingsSheet')
     .addSeparator()
     .addItem('Catat Masalah (Issue Log)', 'logIssue')
-    .addItem('Setup / Reset Issues Sheet', 'addIssuesSheet')
     .addSeparator()
     .addItem('Recalculate Schedule', 'runCalculateSchedule')
     .addItem('Refresh Gantt Chart', 'runDrawGanttChart')
     .addSeparator()
     .addItem('Print: Sembunyikan Kolom Kerja', 'hideColumnsForPrint')
     .addItem('Print: Tampilkan Semua Kolom Lagi', 'showAllColumns')
-    .addSeparator()
-    .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings')
     .addSeparator()
     .addItem('Set Baseline (Simpan Rencana Awal)', 'setBaseline')
     .addSeparator()
@@ -36,6 +50,8 @@ function onOpen() {
     .addSeparator()
     .addItem('Mulai Project Baru (Arsipkan yang Lama)', 'startNewProject')
     .addItem('Lihat Arsip Project', 'openArchiveViewer')
+    .addSeparator()
+    .addSubMenu(resetMenu)
     .addSeparator()
     .addItem('About Timelinea', 'showAbout')
     .addToUi();
@@ -117,13 +133,28 @@ function showAbout() {
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
+/**
+ * This is the single most destructive action in the app — it wipes Tasks,
+ * Settings, AND Resources (Issues is spared, see initializeTimelineaHeadless)
+ * back to the empty sample template. A Yes/No dialog is too easy to click
+ * through on reflex, especially for someone not confident with computers,
+ * so this requires typing an exact confirmation word instead of just a
+ * button tap — cheap for someone who really means it, hard to trigger by
+ * accident.
+ */
 function initializeTimelinea() {
   var ui = SpreadsheetApp.getUi();
-  var response = ui.alert(
-    'Initialize Timelinea',
-    'Ini akan membuat/menimpa sheet "Tasks" dan "Settings" dengan template kosong (data contoh disertakan). Lanjutkan?',
-    ui.ButtonSet.YES_NO);
-  if (response !== ui.Button.YES) return;
+  var response = ui.prompt(
+    'Initialize / Reset Sheets — PERINGATAN',
+    'Ini akan MENGHAPUS seluruh isi sheet Tasks, Settings, dan Resources, lalu menggantinya dengan template ' +
+    'kosong (data contoh disertakan). Data yang sedang ada TIDAK BISA dikembalikan setelah ini. Sheet Issues ' +
+    'tidak akan disentuh.\n\nKalau yakin, ketik RESET di bawah lalu klik OK:',
+    ui.ButtonSet.OK_CANCEL);
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+  if (response.getResponseText().trim().toUpperCase() !== 'RESET') {
+    ui.alert('Dibatalkan — teks yang diketik tidak sama dengan "RESET". Tidak ada yang berubah.');
+    return;
+  }
   initializeTimelineaHeadless();
 }
 
