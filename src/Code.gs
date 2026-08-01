@@ -12,6 +12,9 @@ function onOpen() {
     .addSeparator()
     .addItem('Add Task Row', 'addTaskRow')
     .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
+    .addItem('Add Resource Row', 'addResourceRow')
+    .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
+    .addSeparator()
     .addItem('Recalculate Schedule', 'runCalculateSchedule')
     .addItem('Refresh Gantt Chart', 'runDrawGanttChart')
     .addSeparator()
@@ -43,6 +46,8 @@ function showAbout() {
     'Isi task di sheet "Tasks": Duration, Predecessors (mis. "2FS+1"), % Complete, Cost/Day.\n' +
     'Pakai kolom Level untuk membuat subtask berlapis (0 = task utama, 1 = subtask, 2 = sub-subtask, dst).\n' +
     'Task yang punya subtask otomatis jadi "summary": Start/Finish/% Complete/Cost-nya dirangkum dari anak-anaknya.\n' +
+    'Kolom "Assigned To" menerima beberapa nama sekaligus (pisah koma, mis. "Subur, Ade") yang dicocokkan ke\n' +
+    'sheet "Resources" — gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sana.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
     'atau lewat menu Timelinea > Recalculate / Refresh.',
     SpreadsheetApp.getUi().ButtonSet.OK);
@@ -66,6 +71,7 @@ function initializeTimelinea() {
 function initializeTimelineaHeadless() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   setupSettingsSheet_(ss);
+  setupResourcesSheet_(ss);
   setupTasksSheet_(ss);
   drawGanttChart();
 }
@@ -95,6 +101,62 @@ function setupSettingsSheet_(ss) {
   sheet.setColumnWidth(2, 140);
 }
 
+function setupResourcesSheet_(ss) {
+  var sheet = ss.getSheetByName(RESOURCES_SHEET);
+  if (sheet) ss.deleteSheet(sheet);
+  sheet = ss.insertSheet(RESOURCES_SHEET);
+
+  sheet.getRange(1, 1, 1, RESOURCES_HEADER.length).setValues([RESOURCES_HEADER])
+    .setFontWeight('bold').setBackground(COLOR.HEADER_BG);
+  sheet.setFrozenRows(1);
+
+  var sample = [
+    ['Analyst', 500, 'Business Analyst', '', '', ''],
+    ['Designer', 600, 'UI/UX Designer', '', '', ''],
+    ['Backend Dev', 700, 'Backend Developer', '', '', ''],
+    ['Frontend Dev', 650, 'Frontend Developer', '', '', ''],
+    ['QA', 400, 'QA Engineer', '', '', ''],
+    ['PM', 800, 'Project Manager', '', '', '']
+  ];
+  sheet.getRange(2, 1, sample.length, RESOURCES_HEADER.length).setValues(sample);
+
+  sheet.getRange(2, RESOURCES_COL.RATE, 500, 1).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(2, RESOURCES_COL.TOTAL_DAYS, 500, 1).setNumberFormat('0');
+  sheet.getRange(2, RESOURCES_COL.TOTAL_PAY, 500, 1).setNumberFormat('"Rp"#,##0');
+
+  var widths = [160, 90, 160, 280, 130, 110];
+  widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+}
+
+/** Creates (or resets) just the Resources sheet, without touching Tasks/Settings. */
+function addResourcesSheet() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(RESOURCES_SHEET)) {
+    var response = ui.alert(
+      'Setup Resources Sheet',
+      'Sheet "Resources" sudah ada dan akan direset ke data contoh (Assigned Tasks/Total Pay akan terisi ulang otomatis). Lanjutkan?',
+      ui.ButtonSet.YES_NO);
+    if (response !== ui.Button.YES) return;
+  }
+  setupResourcesSheet_(ss);
+  runCalculateSchedule();
+}
+
+/** Appends a blank resource row at the bottom of the Resources sheet. */
+function addResourceRow() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RESOURCES_SHEET);
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert('Jalankan Timelinea > Setup / Reset Resources Sheet dulu.');
+    return;
+  }
+  var newRow = sheet.getLastRow() + 1;
+  sheet.getRange(newRow, RESOURCES_COL.RATE).setValue(0).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(newRow, RESOURCES_COL.TOTAL_DAYS).setNumberFormat('0');
+  sheet.getRange(newRow, RESOURCES_COL.TOTAL_PAY).setNumberFormat('"Rp"#,##0');
+  sheet.setActiveSelection(sheet.getRange(newRow, RESOURCES_COL.NAME));
+}
+
 function setupTasksSheet_(ss) {
   var sheet = ss.getSheetByName(TASKS_SHEET);
   if (sheet) ss.deleteSheet(sheet);
@@ -107,16 +169,19 @@ function setupTasksSheet_(ss) {
   sheet.setFrozenRows(1);
 
   // Demonstrates a 3-level outline: Phase (0) > task (1) > sub-task (2).
+  // Cost/Day is left at 0 for rows whose Assigned To already matches a
+  // Resources entry — their Planned Cost comes from that resource's
+  // Rate/Day instead, so the two don't double up.
   var sample = [
     [1, 'Project Kickoff', 0, 0, '', '', '', 0, '', 0, '', '', true, '', ''],
     [2, 'Phase 1: Discovery', 0, '', '', '', '', '', '', '', '', '', false, '', ''],
-    [3, 'Requirements Gathering', 1, 3, '', '', '1FS', 0, 'Analyst', 500, '', '', false, '', ''],
-    [4, 'Design', 1, 5, '', '', '3FS', 0, 'Designer', 600, '', '', false, '', ''],
+    [3, 'Requirements Gathering', 1, 3, '', '', '1FS', 0, 'Analyst', 0, '', '', false, '', ''],
+    [4, 'Design', 1, 5, '', '', '3FS', 0, 'Designer', 0, '', '', false, '', ''],
     [5, 'Phase 2: Build & Test', 0, '', '', '', '', '', '', '', '', '', false, '', ''],
     [6, 'Development', 1, '', '', '', '', '', '', '', '', '', false, '', ''],
-    [7, 'Backend', 2, 7, '', '', '4FS', 0, 'Backend Dev', 700, '', '', false, '', ''],
-    [8, 'Frontend', 2, 6, '', '', '4FS', 0, 'Frontend Dev', 650, '', '', false, '', ''],
-    [9, 'Testing', 1, 4, '', '', '7FS,8FS', 0, 'QA', 400, '', '', false, '', ''],
+    [7, 'Backend', 2, 7, '', '', '4FS', 0, 'Backend Dev', 0, '', '', false, '', ''],
+    [8, 'Frontend', 2, 6, '', '', '4FS', 0, 'Frontend Dev', 0, '', '', false, '', ''],
+    [9, 'Testing', 1, 4, '', '', '7FS,8FS', 0, 'QA,PM', 0, '', '', false, '', ''],
     [10, 'Launch', 0, 0, '', '', '9FS', 0, 'PM', 0, '', '', true, '', '']
   ];
   sheet.getRange(2, 1, sample.length, TASKS_HEADER.length).setValues(sample);

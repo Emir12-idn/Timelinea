@@ -50,6 +50,14 @@ function readSettings_(ss) {
   return { projectStart: projectStart, skipWeekends: skipWeekends, holidaySet: holidaySet };
 }
 
+/** Splits "Subur, Ade" into ["Subur", "Ade"]. Names are matched against the Resources sheet case-insensitively. */
+function parseAssignees_(raw) {
+  if (!raw) return [];
+  return String(raw).split(',')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.length > 0; });
+}
+
 function readTasks_(sheet) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
@@ -68,11 +76,57 @@ function readTasks_(sheet) {
       startPinned: row[COL.START - 1] instanceof Date ? stripTime_(row[COL.START - 1]) : null,
       predecessors: parsePredecessors_(row[COL.PREDECESSORS - 1]),
       pctComplete: Number(row[COL.PCT_COMPLETE - 1]) || 0,
+      assignees: parseAssignees_(row[COL.RESOURCE - 1]),
       costRate: Number(row[COL.COST_RATE - 1]) || 0,
       milestoneFlag: row[COL.MILESTONE - 1] === true
     });
   });
   return tasks;
+}
+
+/** Reads the Resources sheet (Name, Rate/Day). Optional — returns [] if the sheet doesn't exist yet. */
+function readResourceRows_(ss) {
+  var sheet = ss.getSheetByName(RESOURCES_SHEET);
+  if (!sheet) return [];
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, RESOURCES_COL.NAME, lastRow - 1, 2).getValues(); // Name, Rate/Day
+  var resources = [];
+  values.forEach(function (row, i) {
+    if (!row[0]) return;
+    resources.push({ name: String(row[0]).trim(), rate: Number(row[1]) || 0, row: i + 2 });
+  });
+  return resources;
+}
+
+/**
+ * Writes each resource's assigned task list, total allocated days, and
+ * total pay (rate/day × total days) back into the Resources sheet.
+ */
+function updateResourceSheet_(ss, resourceRows, tasks) {
+  var sheet = ss.getSheetByName(RESOURCES_SHEET);
+  if (!sheet || resourceRows.length === 0) return;
+
+  var byKey = {};
+  resourceRows.forEach(function (r) {
+    byKey[r.name.toLowerCase()] = { row: r.row, rate: r.rate, taskLabels: [], totalDays: 0 };
+  });
+
+  tasks.forEach(function (t) {
+    t.assignees.forEach(function (name) {
+      var r = byKey[name.toLowerCase()];
+      if (!r) return; // unknown names are surfaced separately via computeLeafCost_
+      r.taskLabels.push(t.name);
+      r.totalDays += Math.max(t.duration, 1);
+    });
+  });
+
+  Object.keys(byKey).forEach(function (key) {
+    var r = byKey[key];
+    sheet.getRange(r.row, RESOURCES_COL.ASSIGNED_TASKS).setValue(r.taskLabels.join(', '));
+    sheet.getRange(r.row, RESOURCES_COL.TOTAL_DAYS).setValue(r.totalDays);
+    sheet.getRange(r.row, RESOURCES_COL.TOTAL_PAY).setValue(r.rate * r.totalDays);
+  });
 }
 
 /**
@@ -196,9 +250,21 @@ function computeCriticalPath_(leafTasks, byId, order, successors, settings) {
   });
 }
 
-/** Planned/actual cost for a leaf task. Cost/Day is treated as a flat one-time cost for milestones. */
-function computeLeafCost_(t) {
-  t.plannedCost = t.milestone ? t.costRate : t.costRate * Math.max(t.duration, 1);
+/**
+ * Planned/actual cost for a leaf task = labor cost (each assignee's
+ * Rate/Day × Duration, from the Resources sheet) + Cost/Day × Duration
+ * (materials/equipment; treated as a flat one-time cost for milestones).
+ * Assignee names not found in Resources are collected into unknownNames
+ * (by reference) so calculateSchedule can warn about typos.
+ */
+function computeLeafCost_(t, rateByName, unknownNames) {
+  var laborCost = t.assignees.reduce(function (sum, name) {
+    var key = name.toLowerCase();
+    if (!(key in rateByName)) { unknownNames[name] = true; return sum; }
+    return sum + rateByName[key] * Math.max(t.duration, 1);
+  }, 0);
+  var flatCost = t.milestone ? t.costRate : t.costRate * Math.max(t.duration, 1);
+  t.plannedCost = laborCost + flatCost;
   t.actualCost = t.plannedCost * (Math.min(Math.max(t.pctComplete, 0), 100) / 100);
 }
 
@@ -258,7 +324,12 @@ function calculateSchedule() {
   var topo = topoSort_(leafTasks, byId);
   computeForwardPass_(leafById, topo.order, settings);
   computeCriticalPath_(leafTasks, leafById, topo.order, topo.successors, settings);
-  leafTasks.forEach(computeLeafCost_);
+
+  var resourceRows = readResourceRows_(ss);
+  var rateByName = {};
+  resourceRows.forEach(function (r) { rateByName[r.name.toLowerCase()] = r.rate; });
+  var unknownNames = {};
+  leafTasks.forEach(function (t) { computeLeafCost_(t, rateByName, unknownNames); });
 
   computeRollups_(tasks, settings);
 
@@ -274,6 +345,16 @@ function calculateSchedule() {
       sheet.getRange(t.row, COL.PCT_COMPLETE).setValue(Math.round(t.pctComplete * 10) / 10);
     }
   });
+
+  updateResourceSheet_(ss, resourceRows, tasks);
+
+  if (Object.keys(unknownNames).length) {
+    try {
+      SpreadsheetApp.getActiveSpreadsheet().toast(
+        'Nama di "Assigned To" tidak ditemukan di sheet Resources: ' + Object.keys(unknownNames).join(', '),
+        'Timelinea', 8);
+    } catch (e) { /* best-effort notice only; never break the calculation over this */ }
+  }
 
   return tasks;
 }

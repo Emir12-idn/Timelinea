@@ -6,6 +6,7 @@
 
 var TASKS_SHEET = 'Tasks';
 var SETTINGS_SHEET = 'Settings';
+var RESOURCES_SHEET = 'Resources';
 
 // Tasks sheet columns (1-indexed)
 var COL = {
@@ -28,13 +29,27 @@ var COL = {
 
 var TASKS_HEADER = [
   'ID', 'Task Name', 'Level', 'Duration (d)', 'Start', 'Finish',
-  'Predecessors', '% Complete', 'Resource', 'Cost/Day', 'Planned Cost',
+  'Predecessors', '% Complete', 'Assigned To', 'Cost/Day', 'Planned Cost',
   'Actual Cost', 'Milestone', 'Critical', 'Slack (d)'
 ];
 
 var TASKS_LAST_COL = 15;   // column O
 var FROZEN_COLS = 2;       // only ID + Task Name — leaves room for the Gantt chart on screen
 var GANTT_START_COL = 17;  // column Q (leaves column P as a spacer)
+
+// Resources sheet columns (1-indexed)
+var RESOURCES_COL = {
+  NAME: 1,
+  RATE: 2,
+  ROLE: 3,
+  ASSIGNED_TASKS: 4,
+  TOTAL_DAYS: 5,
+  TOTAL_PAY: 6
+};
+
+var RESOURCES_HEADER = [
+  'Name', 'Rate/Day', 'Role', 'Assigned Tasks', 'Total Days Allocated', 'Total Pay'
+];
 
 var GANTT_MAX_DAYS = 400;                 // hard cap when rendering one column per day
 var GANTT_WEEK_VIEW_THRESHOLD_DAYS = 45;  // beyond this span, switch to one column per week
