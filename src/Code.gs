@@ -27,7 +27,7 @@ function onOpen() {
     .addItem('Setup / Reset Issues Sheet (HAPUS riwayat masalah)', 'addIssuesSheet')
     .addSeparator()
     .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings')
-    .addItem('Aktifkan Kolom +/- (Tambah/Hapus Baris)', 'refreshRowActionColumn');
+    .addItem('Aktifkan Kolom +/↓/- (Tambah Sejajar/Subtask/Hapus)', 'refreshRowActionColumn');
 
   ui.createMenu('Timelinea')
     .addItem('Add Task Row', 'addTaskRow')
@@ -88,9 +88,9 @@ function runDrawGanttChart() {
 function hideColumnsForPrint() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) { SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.'); return; }
-  sheet.hideColumns(COL.PREDECESSORS, ROW_ACTION_COL - COL.PREDECESSORS + 1); // through the +/- control column too
+  sheet.hideColumns(COL.PREDECESSORS, ROW_ACTION_COL - COL.PREDECESSORS + 1); // through the +/↓/- control column too
   SpreadsheetApp.getActiveSpreadsheet().toast(
-    'Kolom Predecessors s/d +/- disembunyikan. Pakai Timelinea > Print: Tampilkan Semua Kolom Lagi untuk mengembalikan.',
+    'Kolom Predecessors s/d +/↓/- disembunyikan. Pakai Timelinea > Print: Tampilkan Semua Kolom Lagi untuk mengembalikan.',
     'Timelinea', 6);
 }
 
@@ -114,8 +114,9 @@ function showAbout() {
     'centang. Gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sheet Resources.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
-    'Tidak perlu buka menu Timelinea tiap mau tambah/hapus baris — klik sel di kolom "+/-" (kolom T, sebelum\n' +
-    'area Gantt chart) lalu pilih "+ Tambah baris" atau "- Hapus baris" (akan ada konfirmasi dulu).\n' +
+    'Tidak perlu buka menu Timelinea tiap mau tambah/hapus baris — klik sel di kolom "+ / ↓ / -" (kolom T,\n' +
+    'sebelum area Gantt chart): "+" = task baru sejajar, "↓" = subtask (anak, satu level lebih dalam),\n' +
+    '"-" = hapus baris itu (akan ada konfirmasi dulu).\n' +
     'Kolom Start/Finish/Planned Cost/Actual Cost/Critical/Slack dihitung otomatis dan akan selalu ditimpa\n' +
     'ulang — Google Sheets akan memberi peringatan kalau Anda mencoba mengeditnya manual.\n' +
     'Isi "Deadline Project" di sheet Settings (opsional) untuk membandingkan target selesai dari klien dengan\n' +
@@ -529,25 +530,27 @@ function setupTasksSheet_(ss) {
 }
 
 /**
- * Sets up the "+/-" per-row control in ROW_ACTION_COL (the old Gantt spacer
- * column, reused rather than adding a new column — that would have needed a
- * full Tasks reset for anyone already using the sheet). A dropdown, not
- * checkboxes, since it needs two distinct actions (add/delete) in one
- * column. setAllowInvalid(true) so it doesn't hard-block whatever a user
- * types there. Actual behavior lives in handleRowAction_, wired from onEdit.
+ * Sets up the "+/↓/-" per-row control in ROW_ACTION_COL (the old Gantt
+ * spacer column, reused rather than adding a new column — that would have
+ * needed a full Tasks reset for anyone already using the sheet). A
+ * dropdown, not checkboxes, since it needs three distinct actions in one
+ * column: + Tambah sejajar (sibling), ↓ Tambah subtask (child), - Hapus
+ * baris (delete). setAllowInvalid(true) so it doesn't hard-block whatever a
+ * user types there. Actual behavior lives in handleRowAction_, wired from
+ * onEdit.
  */
 function applyRowActionColumn_(sheet) {
-  sheet.getRange(1, ROW_ACTION_COL).setValue('+/-')
+  sheet.getRange(1, ROW_ACTION_COL).setValue('+ / ↓ / -')
     .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sheet.setColumnWidth(ROW_ACTION_COL, 110);
+  sheet.setColumnWidth(ROW_ACTION_COL, 140);
   sheet.getRange(2, ROW_ACTION_COL, 498, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList([ROW_ACTION_ADD, ROW_ACTION_DELETE], true)
+    SpreadsheetApp.newDataValidation().requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE], true)
       .setAllowInvalid(true).build());
 }
 
 /**
- * Adds the "+/-" column to a Tasks sheet that was initialized before this
+ * Adds the "+/↓/-" column to a Tasks sheet that was initialized before this
  * feature existed, without touching any Task data — the same reasoning as
  * Setup / Reset Settings Sheet: picking up a new feature shouldn't require
  * wiping existing work via a full Initialize.
@@ -557,9 +560,9 @@ function refreshRowActionColumn() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
   applyRowActionColumn_(sheet);
-  ui.alert('Selesai. Kolom "+/-" di sheet Tasks (kolom T, sebelum area Gantt chart) sekarang aktif — pilih ' +
-    '"+ Tambah baris" di satu baris untuk menyisipkan task baru sejajar di bawahnya, atau "- Hapus baris" untuk ' +
-    'menghapus baris itu (akan diminta konfirmasi dulu).');
+  ui.alert('Selesai. Kolom "+ / ↓ / -" di sheet Tasks (kolom T, sebelum area Gantt chart) sekarang aktif — pilih ' +
+    '"+ Tambah sejajar" untuk task baru selevel di bawahnya, "↓ Tambah subtask" untuk anak satu level lebih ' +
+    'dalam, atau "- Hapus baris" untuk menghapus baris itu (akan diminta konfirmasi dulu).');
 }
 
 /**
@@ -739,7 +742,7 @@ function formatNewTaskRow_(sheet, row) {
   sheet.getRange(row, COL.VARIANCE).setNumberFormat('+0;-0;0');
   sheet.getRange(row, COL.HAS_ISSUE).insertCheckboxes().setValue(false);
   sheet.getRange(row, ROW_ACTION_COL).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList([ROW_ACTION_ADD, ROW_ACTION_DELETE], true)
+    SpreadsheetApp.newDataValidation().requireValueInList([ROW_ACTION_ADD, ROW_ACTION_SUBTASK, ROW_ACTION_DELETE], true)
       .setAllowInvalid(true).build());
 }
 
@@ -801,15 +804,17 @@ function addSiblingRow() {
 }
 
 /**
- * Handles an edit to the ROW_ACTION_COL cell (the "+/-" column reusing the
- * old Gantt spacer column) — reported request: something closer to MS
- * Project's inline add/delete instead of always going through the menu.
- * "+ Tambah baris" inserts a same-level sibling right below (mirrors
- * addSiblingRow); "- Hapus baris" deletes the row after a confirmation,
- * since that's irreversible and this column is exactly the kind of thing an
- * unfamiliar user could tap by accident. If the confirmation dialog can't be
- * shown for any reason, the row is NOT deleted — never delete data without
- * being sure the user actually confirmed.
+ * Handles an edit to the ROW_ACTION_COL cell (the "+/subtask/-" column
+ * reusing the old Gantt spacer column) — reported request: something closer
+ * to MS Project's inline add/delete instead of always going through the
+ * menu, with three distinct, simple choices: "+ Tambah sejajar" inserts a
+ * same-level sibling right below (mirrors addSiblingRow), "↓ Tambah
+ * subtask" inserts a child one level deeper (mirrors addSubtaskRow), and
+ * "- Hapus baris" deletes the row after a confirmation, since that's
+ * irreversible and this column is exactly the kind of thing an unfamiliar
+ * user could tap by accident. If the confirmation dialog can't be shown for
+ * any reason, the row is NOT deleted — never delete data without being sure
+ * the user actually confirmed.
  */
 function handleRowAction_(range) {
   var sheet = range.getSheet();
@@ -819,6 +824,12 @@ function handleRowAction_(range) {
   if (value === ROW_ACTION_ADD) {
     range.setValue('');
     insertSiblingRowAt_(sheet, row);
+    return;
+  }
+
+  if (value === ROW_ACTION_SUBTASK) {
+    range.setValue('');
+    insertSubtaskRowAt_(sheet, row);
     return;
   }
 
@@ -851,7 +862,19 @@ function handleRowAction_(range) {
     return;
   }
 
-  range.setValue(''); // any stray value that isn't one of the two options
+  range.setValue(''); // any stray value that isn't one of the three options
+}
+
+/** Shared by addSubtaskRow() (menu) and handleRowAction_() (the +/- column). */
+function insertSubtaskRowAt_(sheet, row) {
+  var parentLevel = Number(sheet.getRange(row, COL.LEVEL).getValue()) || 0;
+  var newRow = row + 1;
+  sheet.insertRowAfter(row);
+  sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
+  formatNewTaskRow_(sheet, newRow);
+  sheet.getRange(newRow, COL.LEVEL).setValue(parentLevel + 1);
+  sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
+  refreshAfterRowInsert_();
 }
 
 /**
@@ -869,12 +892,5 @@ function addSubtaskRow() {
     SpreadsheetApp.getUi().alert('Pilih dulu baris task yang mau diberi subtask.');
     return;
   }
-  var parentLevel = Number(sheet.getRange(activeRow, COL.LEVEL).getValue()) || 0;
-  var newRow = activeRow + 1;
-  sheet.insertRowAfter(activeRow);
-  sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
-  formatNewTaskRow_(sheet, newRow);
-  sheet.getRange(newRow, COL.LEVEL).setValue(parentLevel + 1);
-  sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
-  refreshAfterRowInsert_();
+  insertSubtaskRowAt_(sheet, activeRow);
 }

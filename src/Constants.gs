@@ -41,10 +41,11 @@ var TASKS_HEADER = [
 
 var TASKS_LAST_COL = 19;   // column S
 var FROZEN_COLS = 2;       // only ID + Task Name — leaves room for the Gantt chart on screen
-var ROW_ACTION_COL = 20;   // column T (the old Gantt spacer) — per-row "+ / -" control, see handleRowAction_
+var ROW_ACTION_COL = 20;   // column T (the old Gantt spacer) — per-row +/subtask/- control, see handleRowAction_
 var GANTT_START_COL = 21;  // column U
 
-var ROW_ACTION_ADD = '+ Tambah baris';
+var ROW_ACTION_ADD = '+ Tambah sejajar';
+var ROW_ACTION_SUBTASK = '↓ Tambah subtask';
 var ROW_ACTION_DELETE = '- Hapus baris';
 
 // Issues sheet columns (1-indexed) — a running problem/lessons-learned log,
