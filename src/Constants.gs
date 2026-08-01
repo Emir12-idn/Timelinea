@@ -11,31 +11,42 @@ var SETTINGS_SHEET = 'Settings';
 var COL = {
   ID: 1,
   NAME: 2,
-  DURATION: 3,
-  START: 4,
-  FINISH: 5,
-  PREDECESSORS: 6,
-  PCT_COMPLETE: 7,
-  RESOURCE: 8,
-  MILESTONE: 9,
-  CRITICAL: 10,
-  SLACK: 11
+  LEVEL: 3,
+  DURATION: 4,
+  START: 5,
+  FINISH: 6,
+  PREDECESSORS: 7,
+  PCT_COMPLETE: 8,
+  RESOURCE: 9,
+  COST_RATE: 10,
+  PLANNED_COST: 11,
+  ACTUAL_COST: 12,
+  MILESTONE: 13,
+  CRITICAL: 14,
+  SLACK: 15
 };
 
 var TASKS_HEADER = [
-  'ID', 'Task Name', 'Duration (d)', 'Start', 'Finish',
-  'Predecessors', '% Complete', 'Resource', 'Milestone', 'Critical', 'Slack (d)'
+  'ID', 'Task Name', 'Level', 'Duration (d)', 'Start', 'Finish',
+  'Predecessors', '% Complete', 'Resource', 'Cost/Day', 'Planned Cost',
+  'Actual Cost', 'Milestone', 'Critical', 'Slack (d)'
 ];
 
-var TASKS_LAST_COL = 11;      // column K
-var GANTT_START_COL = 13;     // column M (leaves column L as a spacer)
-var GANTT_MAX_DAYS = 400;     // hard cap to keep the chart within Sheets limits
+var TASKS_LAST_COL = 15;   // column O
+var FROZEN_COLS = 2;       // only ID + Task Name — leaves room for the Gantt chart on screen
+var GANTT_START_COL = 17;  // column Q (leaves column P as a spacer)
+
+var GANTT_MAX_DAYS = 400;                 // hard cap when rendering one column per day
+var GANTT_WEEK_VIEW_THRESHOLD_DAYS = 45;  // beyond this span, switch to one column per week
+var GANTT_MAX_WEEKS = 260;                // ~5 years, hard cap when rendering one column per week
 
 // Settings sheet cell addresses
 var SETTINGS = {
   PROJECT_START: 'B3',
   SKIP_WEEKENDS: 'B4',
-  HOLIDAYS_FIRST_ROW: 7,
+  TOTAL_PLANNED_COST: 'B6',
+  TOTAL_ACTUAL_COST: 'B7',
+  HOLIDAYS_FIRST_ROW: 10,
   HOLIDAYS_COL: 2 // column B
 };
 
@@ -44,6 +55,7 @@ var COLOR = {
   BAR_NORMAL_DONE: '#1c4587',
   BAR_CRITICAL: '#e06666',
   BAR_CRITICAL_DONE: '#990000',
+  BAR_SUMMARY: '#434343',
   MILESTONE: '#000000',
   TODAY_BORDER: '#ff9900',
   WEEKEND_BG: '#f3f3f3',

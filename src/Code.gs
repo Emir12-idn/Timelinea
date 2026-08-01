@@ -1,7 +1,8 @@
 /**
  * Timelinea — a lightweight "MS Project in Google Sheets" powered by Apps
  * Script: task list with auto-scheduling (CPM), predecessor dependencies,
- * critical path highlighting and an auto-drawn Gantt chart.
+ * multi-level subtasks, cost tracking, critical path highlighting and an
+ * auto-drawn Gantt chart.
  */
 
 function onOpen() {
@@ -10,6 +11,7 @@ function onOpen() {
     .addItem('Initialize / Reset Sheets', 'initializeTimelinea')
     .addSeparator()
     .addItem('Add Task Row', 'addTaskRow')
+    .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
     .addItem('Recalculate Schedule', 'runCalculateSchedule')
     .addItem('Refresh Gantt Chart', 'runDrawGanttChart')
     .addSeparator()
@@ -38,9 +40,11 @@ function runDrawGanttChart() {
 function showAbout() {
   SpreadsheetApp.getUi().alert(
     'Timelinea',
-    'Isi task di sheet "Tasks": Duration, Predecessors (mis. "2FS+1"), % Complete.\n' +
-    'Timelinea otomatis menghitung Start/Finish, jalur kritis, dan menggambar Gantt chart\n' +
-    'setiap kali Anda mengedit, atau lewat menu Timelinea > Recalculate / Refresh.',
+    'Isi task di sheet "Tasks": Duration, Predecessors (mis. "2FS+1"), % Complete, Cost/Day.\n' +
+    'Pakai kolom Level untuk membuat subtask berlapis (0 = task utama, 1 = subtask, 2 = sub-subtask, dst).\n' +
+    'Task yang punya subtask otomatis jadi "summary": Start/Finish/% Complete/Cost-nya dirangkum dari anak-anaknya.\n' +
+    'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
+    'atau lewat menu Timelinea > Recalculate / Refresh.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -76,10 +80,18 @@ function setupSettingsSheet_(ss) {
   sheet.getRange(SETTINGS.PROJECT_START).setValue(stripTime_(new Date())).setNumberFormat('yyyy-MM-dd');
   sheet.getRange('A4').setValue('Skip Weekends');
   sheet.getRange(SETTINGS.SKIP_WEEKENDS).insertCheckboxes().setValue(true);
-  sheet.getRange('A6').setValue('Holidays (satu tanggal per baris, mulai baris ini ke bawah):').setFontStyle('italic');
+
+  sheet.getRange('A6').setValue('Total Planned Cost');
+  sheet.getRange(SETTINGS.TOTAL_PLANNED_COST)
+    .setFormula('=SUMIF(Tasks!C2:C1000,0,Tasks!K2:K1000)').setNumberFormat('"Rp"#,##0');
+  sheet.getRange('A7').setValue('Total Actual Cost (Spent to Date)');
+  sheet.getRange(SETTINGS.TOTAL_ACTUAL_COST)
+    .setFormula('=SUMIF(Tasks!C2:C1000,0,Tasks!L2:L1000)').setNumberFormat('"Rp"#,##0');
+
+  sheet.getRange('A9').setValue('Holidays (satu tanggal per baris, mulai baris ini ke bawah):').setFontStyle('italic');
   sheet.getRange(SETTINGS.HOLIDAYS_FIRST_ROW, SETTINGS.HOLIDAYS_COL, 10, 1).setNumberFormat('yyyy-MM-dd');
 
-  sheet.setColumnWidth(1, 220);
+  sheet.setColumnWidth(1, 260);
   sheet.setColumnWidth(2, 140);
 }
 
@@ -94,47 +106,95 @@ function setupTasksSheet_(ss) {
     .setFontWeight('bold').setBackground(COLOR.HEADER_BG);
   sheet.setFrozenRows(1);
 
+  // Demonstrates a 3-level outline: Phase (0) > task (1) > sub-task (2).
   var sample = [
-    [1, 'Project Kickoff', 0, '', '', '', 0, '', true, '', ''],
-    [2, 'Requirements Gathering', 3, '', '', '1FS', 0, 'Analyst', false, '', ''],
-    [3, 'Design', 5, '', '', '2FS', 0, 'Designer', false, '', ''],
-    [4, 'Development', 10, '', '', '3FS', 0, 'Dev Team', false, '', ''],
-    [5, 'Testing', 4, '', '', '4FS', 0, 'QA', false, '', ''],
-    [6, 'Launch', 0, '', '', '5FS', 0, 'PM', true, '', '']
+    [1, 'Project Kickoff', 0, 0, '', '', '', 0, '', 0, '', '', true, '', ''],
+    [2, 'Phase 1: Discovery', 0, '', '', '', '', '', '', '', '', '', false, '', ''],
+    [3, 'Requirements Gathering', 1, 3, '', '', '1FS', 0, 'Analyst', 500, '', '', false, '', ''],
+    [4, 'Design', 1, 5, '', '', '3FS', 0, 'Designer', 600, '', '', false, '', ''],
+    [5, 'Phase 2: Build & Test', 0, '', '', '', '', '', '', '', '', '', false, '', ''],
+    [6, 'Development', 1, '', '', '', '', '', '', '', '', '', false, '', ''],
+    [7, 'Backend', 2, 7, '', '', '4FS', 0, 'Backend Dev', 700, '', '', false, '', ''],
+    [8, 'Frontend', 2, 6, '', '', '4FS', 0, 'Frontend Dev', 650, '', '', false, '', ''],
+    [9, 'Testing', 1, 4, '', '', '7FS,8FS', 0, 'QA', 400, '', '', false, '', ''],
+    [10, 'Launch', 0, 0, '', '', '9FS', 0, 'PM', 0, '', '', true, '', '']
   ];
   sheet.getRange(2, 1, sample.length, TASKS_HEADER.length).setValues(sample);
 
+  sheet.getRange(2, COL.LEVEL, 500, 1).setNumberFormat('0');
   sheet.getRange(2, COL.DURATION, 500, 1).setNumberFormat('0');
   sheet.getRange(2, COL.START, 500, 1).setNumberFormat('yyyy-MM-dd');
   sheet.getRange(2, COL.FINISH, 500, 1).setNumberFormat('yyyy-MM-dd');
-  sheet.getRange(2, COL.PCT_COMPLETE, 500, 1).setNumberFormat('0"%"');
+  sheet.getRange(2, COL.PCT_COMPLETE, 500, 1).setNumberFormat('0.0"%"');
+  sheet.getRange(2, COL.COST_RATE, 500, 1).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(2, COL.PLANNED_COST, 500, 1).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(2, COL.ACTUAL_COST, 500, 1).setNumberFormat('"Rp"#,##0');
   sheet.getRange(2, COL.MILESTONE, 500, 1).insertCheckboxes();
   sheet.getRange(2, COL.CRITICAL, 500, 1).insertCheckboxes();
 
-  var widths = [40, 220, 90, 95, 95, 110, 90, 110, 80, 70, 70];
+  var widths = [40, 220, 50, 80, 95, 95, 110, 85, 110, 85, 100, 100, 75, 70, 65];
   widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
 
   sheet.getRange(2, COL.PCT_COMPLETE, 500, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireNumberBetween(0, 100).setAllowInvalid(false).build());
+  sheet.getRange(2, COL.LEVEL, 500, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireNumberBetween(0, 8).setAllowInvalid(false).build());
 }
 
-/** Appends a new task row pre-filled with the next sequential ID. */
+function nextTaskId_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var ids = lastRow >= 2
+    ? sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues().flat().filter(function (v) { return v !== ''; })
+    : [];
+  return ids.length ? Math.max.apply(null, ids) + 1 : 1;
+}
+
+function formatNewTaskRow_(sheet, row) {
+  sheet.getRange(row, COL.LEVEL).setValue(0).setNumberFormat('0');
+  sheet.getRange(row, COL.DURATION).setValue(1).setNumberFormat('0');
+  sheet.getRange(row, COL.START).setNumberFormat('yyyy-MM-dd');
+  sheet.getRange(row, COL.FINISH).setNumberFormat('yyyy-MM-dd');
+  sheet.getRange(row, COL.PCT_COMPLETE).setValue(0).setNumberFormat('0.0"%"');
+  sheet.getRange(row, COL.COST_RATE).setValue(0).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(row, COL.PLANNED_COST).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(row, COL.ACTUAL_COST).setNumberFormat('"Rp"#,##0');
+  sheet.getRange(row, COL.MILESTONE).insertCheckboxes().setValue(false);
+  sheet.getRange(row, COL.CRITICAL).insertCheckboxes();
+}
+
+/** Appends a new top-level task row at the bottom, pre-filled with the next sequential ID. */
 function addTaskRow() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) {
     SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.');
     return;
   }
-  var lastRow = sheet.getLastRow();
-  var ids = lastRow >= 2 ? sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues().flat().filter(function (v) { return v !== ''; }) : [];
-  var nextId = ids.length ? Math.max.apply(null, ids) + 1 : 1;
-  var newRow = lastRow + 1;
-  sheet.getRange(newRow, COL.ID).setValue(nextId);
-  sheet.getRange(newRow, COL.DURATION).setValue(1).setNumberFormat('0');
-  sheet.getRange(newRow, COL.START).setNumberFormat('yyyy-MM-dd');
-  sheet.getRange(newRow, COL.FINISH).setNumberFormat('yyyy-MM-dd');
-  sheet.getRange(newRow, COL.PCT_COMPLETE).setValue(0).setNumberFormat('0"%"');
-  sheet.getRange(newRow, COL.MILESTONE).insertCheckboxes().setValue(false);
-  sheet.getRange(newRow, COL.CRITICAL).insertCheckboxes();
+  var newRow = sheet.getLastRow() + 1;
+  sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
+  formatNewTaskRow_(sheet, newRow);
+  sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
+}
+
+/**
+ * Inserts a new subtask row directly below the currently selected row, one
+ * Level deeper than it — the same "indent a new row" flow MS Project uses.
+ */
+function addSubtaskRow() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.');
+    return;
+  }
+  var activeRow = sheet.getActiveRange().getRow();
+  if (activeRow < 2) {
+    SpreadsheetApp.getUi().alert('Pilih dulu baris task yang mau diberi subtask.');
+    return;
+  }
+  var parentLevel = Number(sheet.getRange(activeRow, COL.LEVEL).getValue()) || 0;
+  var newRow = activeRow + 1;
+  sheet.insertRowAfter(activeRow);
+  sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
+  formatNewTaskRow_(sheet, newRow);
+  sheet.getRange(newRow, COL.LEVEL).setValue(parentLevel + 1);
   sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
 }
