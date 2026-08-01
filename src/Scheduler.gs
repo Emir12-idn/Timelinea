@@ -13,7 +13,13 @@
  * leaf tasks, not summary tasks — link to the relevant child(ren) instead.
  */
 
-/** Parses "2,3FS+1,4SS-2" into [{id:2,type:'FS',lag:0}, {id:3,type:'FS',lag:1}, ...]. */
+/**
+ * Parses "2,3FS+1,4SS-2" into [{id:2,type:'FS',lag:0}, {id:3,type:'FS',lag:1}, ...].
+ * Also accepts the ID and link-type the other way round ("SS2" as well as
+ * "2SS") — reported as a real point of confusion (typed "SS2", got rejected
+ * as invalid with no hint of the expected order), and both orderings are
+ * unambiguous to parse, so there's no reason to require just one.
+ */
 function parsePredecessors_(raw) {
   if (!raw) return [];
   return String(raw).split(',')
@@ -21,10 +27,16 @@ function parsePredecessors_(raw) {
     .filter(function (token) { return token.length > 0; })
     .map(function (token) {
       var m = token.match(/^(\d+)\s*(FS|SS|FF|SF)?\s*([+-]\d+)?$/i);
-      if (!m) throw new Error('Predecessor tidak valid: "' + token + '"');
+      var idFirst = true;
+      if (!m) { m = token.match(/^(FS|SS|FF|SF)\s*(\d+)\s*([+-]\d+)?$/i); idFirst = false; }
+      if (!m) {
+        throw new Error('Predecessor tidak valid: "' + token + '". Contoh format yang benar: "2", "2FS+1", atau "SS2".');
+      }
+      var idStr = idFirst ? m[1] : m[2];
+      var typeStr = idFirst ? m[2] : m[1];
       return {
-        id: parseInt(m[1], 10),
-        type: (m[2] || 'FS').toUpperCase(),
+        id: parseInt(idStr, 10),
+        type: (typeStr || 'FS').toUpperCase(),
         lag: m[3] ? parseInt(m[3], 10) : 0
       };
     });
