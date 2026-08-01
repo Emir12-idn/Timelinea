@@ -53,7 +53,8 @@ Alternatif: gunakan [`clasp`](https://github.com/google/clasp) — file `src/app
 - Setiap kali Anda mengubah Level/Duration/Predecessors/Start/% Complete/Assigned To/Cost per Day/Milestone di Tasks, atau Name/Rate per Day di Resources, jadwal, cost, dan Gantt chart **otomatis dihitung ulang** (trigger `onEdit`).
 - Menu **Timelinea > Recalculate Schedule** / **Refresh Gantt Chart** tersedia untuk memicu ulang secara manual.
 - **Timelinea > Add Task Row** menambah task baru (top-level) di baris paling bawah.
-- **Timelinea > Add Sub-task** menyisipkan baris baru tepat di bawah baris yang sedang dipilih, dengan Level otomatis satu tingkat lebih dalam — cara tercepat membuat subtask baru.
+- **Timelinea > Add Task Sejajar** menyisipkan baris baru tepat di bawah baris yang sedang dipilih, dengan Level yang **sama** — dipakai untuk menambah task/subtask lain di tingkat yang sama (mis. subtask kedua, ketiga, dst di bawah task induk yang sama).
+- **Timelinea > Add Sub-task** menyisipkan baris baru tepat di bawah baris yang sedang dipilih, dengan Level otomatis satu tingkat **lebih dalam** dari baris itu — dipakai untuk membuat anak/subtask pertama dari sebuah task. Kalau Anda pakai menu ini untuk menambah subtask lagi di bawah subtask yang sudah ada, hasilnya jadi cucu (level+2), bukan sejajar — pakai Add Task Sejajar untuk itu.
 - **Timelinea > Add Resource Row** / **Setup / Reset Resources Sheet** untuk mengelola daftar tenaga kerja.
 - **Timelinea > Mulai Project Baru (Arsipkan yang Lama)** mengunci data project yang sedang berjalan (Tasks + Resources) ke file `.tla` terenkripsi di folder Drive "Timelinea Archives", lalu mengosongkan sheet Tasks untuk project baru — sheet dan file Apps Script tetap satu, tidak perlu bikin salinan baru.
 - **Timelinea > Lihat Arsip Project** membuka daftar arsip lama dalam dialog read-only (tidak bisa diedit/disimpan ulang), dengan tombol Print / Simpan sebagai PDF untuk kebutuhan bagikan ke klien.

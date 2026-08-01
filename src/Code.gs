@@ -11,6 +11,7 @@ function onOpen() {
     .addItem('Initialize / Reset Sheets', 'initializeTimelinea')
     .addSeparator()
     .addItem('Add Task Row', 'addTaskRow')
+    .addItem('Add Task Sejajar (level sama, di bawah baris terpilih)', 'addSiblingRow')
     .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
     .addItem('Add Resource Row', 'addResourceRow')
     .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
@@ -56,6 +57,8 @@ function showAbout() {
     'Timelinea',
     'Isi task di sheet "Tasks": Duration, Predecessors (mis. "2FS+1"), % Complete, Cost/Day.\n' +
     'Pakai kolom Level untuk membuat subtask berlapis (0 = task utama, 1 = subtask, 2 = sub-subtask, dst).\n' +
+    'Timelinea > Add Task Sejajar menambah baris baru SETARA (level sama) di bawah baris yang dipilih; ' +
+    'Timelinea > Add Sub-task menambah baris satu level LEBIH DALAM (anak) dari baris yang dipilih.\n' +
     'Task yang punya subtask otomatis jadi "summary": Start/Finish/% Complete/Cost-nya dirangkum dari anak-anaknya.\n' +
     'Kolom "Assigned To" menerima beberapa nama sekaligus (pisah koma, mis. "Subur, Ade") yang dicocokkan ke\n' +
     'sheet "Resources" — gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sana.\n' +
@@ -474,6 +477,35 @@ function addTaskRow() {
   var newRow = sheet.getLastRow() + 1;
   sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
   formatNewTaskRow_(sheet, newRow);
+  sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
+  refreshAfterRowInsert_();
+}
+
+/**
+ * Inserts a new row directly below the currently selected row, at the SAME
+ * Level — for adding another item alongside an existing task/subtask (a
+ * sibling), as opposed to Add Sub-task which nests one level deeper. Without
+ * this, the only way to add a second Level-1 item under the same parent was
+ * to (mis-)use Add Sub-task, which instead created a Level-2 child of the
+ * selected row — a reported point of confusion.
+ */
+function addSiblingRow() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert('Jalankan Timelinea > Initialize dulu.');
+    return;
+  }
+  var activeRow = sheet.getActiveRange().getRow();
+  if (activeRow < 2) {
+    SpreadsheetApp.getUi().alert('Pilih dulu baris task yang levelnya mau disamakan.');
+    return;
+  }
+  var level = Number(sheet.getRange(activeRow, COL.LEVEL).getValue()) || 0;
+  var newRow = activeRow + 1;
+  sheet.insertRowAfter(activeRow);
+  sheet.getRange(newRow, COL.ID).setValue(nextTaskId_(sheet));
+  formatNewTaskRow_(sheet, newRow);
+  sheet.getRange(newRow, COL.LEVEL).setValue(level);
   sheet.setActiveSelection(sheet.getRange(newRow, COL.NAME));
   refreshAfterRowInsert_();
 }
