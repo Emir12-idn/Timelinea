@@ -244,6 +244,7 @@ function addResourcesSheet() {
     if (response !== ui.Button.YES) return;
   }
   setupResourcesSheet_(ss);
+  applyAssignedToDropdown_(ss); // Resources sheet was just recreated, so re-point the Tasks dropdown at it
   runCalculateSchedule();
 }
 
@@ -484,6 +485,29 @@ function setupTasksSheet_(ss) {
   ]);
 
   applyAutoColumnWarnings_(sheet);
+  applyAssignedToDropdown_(ss);
+}
+
+/**
+ * Assigned To dropdown, sourced live from the Resources Name column instead
+ * of a fixed list — so adding a new person to Resources immediately shows
+ * up as a choice here with no extra step. setAllowInvalid(true) on purpose:
+ * Assigned To supports multiple comma-separated names on one task (e.g.
+ * "Subur, Ade"), which can't be a single dropdown selection, so typing is
+ * still allowed for that case — this just makes the common single-assignee
+ * case a click instead of retyping a name (and retyping is exactly what
+ * causes the silent "name not found in Resources" cost bug from a typo).
+ * Re-applied whenever Resources is rebuilt (Setup / Reset Resources Sheet
+ * deletes and recreates that sheet, which would otherwise leave this
+ * dropdown pointing at a range that no longer exists).
+ */
+function applyAssignedToDropdown_(ss) {
+  var tasksSheet = ss.getSheetByName(TASKS_SHEET);
+  var resourcesSheet = ss.getSheetByName(RESOURCES_SHEET);
+  if (!tasksSheet || !resourcesSheet) return;
+  var nameRange = resourcesSheet.getRange(2, RESOURCES_COL.NAME, 500, 1);
+  tasksSheet.getRange(2, COL.RESOURCE, 500, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInRange(nameRange, true).setAllowInvalid(true).build());
 }
 
 var AUTO_COL_PROTECTION_DESC_ = 'Timelinea: kolom otomatis (dihitung ulang tiap Recalculate)';
