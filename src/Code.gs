@@ -712,9 +712,15 @@ function refreshRowActionColumn() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TASKS_SHEET);
   if (!sheet) { ui.alert('Jalankan Timelinea > Initialize dulu.'); return; }
   applyRowActionColumn_(sheet);
-  ui.alert('Selesai. Kolom "+ / ↓ / -" di sheet Tasks (tepat di sebelah Task Name) sekarang aktif — pilih "+" ' +
-    'untuk task baru selevel di bawahnya, "↓" untuk subtask (anak, satu level lebih dalam), atau "-" untuk ' +
-    'menghapus baris itu (akan diminta konfirmasi dulu).');
+  // Also strips the old single-select Assigned To dropdown if this sheet
+  // was set up before that was replaced by the "👤" picker — otherwise a
+  // sheet initialized before this change keeps both mechanisms around,
+  // exactly the "two ways to do the same thing" this was meant to fix.
+  sheet.getRange(2, COL.RESOURCE, 498, 1).clearDataValidations();
+  ui.alert('Selesai. Kolom "+ / ↓ / -" di sheet Tasks (tepat di sebelah Task Name) sekarang aktif — "+" untuk ' +
+    'task baru selevel, "↓" untuk subtask, "👤" untuk pilih Assigned To (bisa lebih dari satu orang), atau "-" ' +
+    'untuk hapus baris (ada konfirmasi dulu). Dropdown 1-pilihan lama di kolom Assigned To (kalau masih ada) ' +
+    'juga sudah dihapus.');
 }
 
 /**
