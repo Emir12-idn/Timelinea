@@ -12,6 +12,7 @@ Ms schedule
 - **Critical path**: task pada jalur kritis (slack = 0) otomatis ditandai dan diwarnai merah
 - **Gantt chart otomatis**: per-hari untuk proyek pendek, otomatis beralih ke per-minggu untuk proyek panjang (>45 hari) supaya tetap muat di layar; hanya kolom ID + Task Name yang dibekukan agar chart punya ruang lebih
 - Milestone (durasi 0) digambar sebagai diamond (◆), summary/task induk digambar sebagai bar gelap
+- **Arsip project terkunci**: "Mulai Project Baru" mengunci data project lama jadi file terenkripsi (`.tla`, tidak bisa dibuka aplikasi lain) dan mengosongkan Tasks untuk project berikutnya — tanpa perlu bikin Sheet baru. Arsip lama tetap bisa dilihat & diprint (read-only, tidak bisa disave) lewat menu Timelinea
 
 ## Instalasi
 
@@ -24,6 +25,8 @@ Ms schedule
    - `Gantt.gs`
    - `Code.gs`
    - `Triggers.gs`
+   - `Archive.gs`
+   - `ArchiveDialog.html` (buat lewat File > HTML, bukan Script, di editor Apps Script)
 4. Simpan, lalu kembali ke Google Sheet dan **refresh halaman**. Menu baru **Timelinea** akan muncul di menu bar (di desktop; lihat catatan mobile di bawah).
 5. Klik **Timelinea > Initialize / Reset Sheets** untuk membuat sheet `Tasks` dan `Settings` beserta data contoh.
 
@@ -47,6 +50,8 @@ Alternatif: gunakan [`clasp`](https://github.com/google/clasp) — file `src/app
 - **Timelinea > Add Task Row** menambah task baru (top-level) di baris paling bawah.
 - **Timelinea > Add Sub-task** menyisipkan baris baru tepat di bawah baris yang sedang dipilih, dengan Level otomatis satu tingkat lebih dalam — cara tercepat membuat subtask baru.
 - **Timelinea > Add Resource Row** / **Setup / Reset Resources Sheet** untuk mengelola daftar tenaga kerja.
+- **Timelinea > Mulai Project Baru (Arsipkan yang Lama)** mengunci data project yang sedang berjalan (Tasks + Resources) ke file `.tla` terenkripsi di folder Drive "Timelinea Archives", lalu mengosongkan sheet Tasks untuk project baru — sheet dan file Apps Script tetap satu, tidak perlu bikin salinan baru.
+- **Timelinea > Lihat Arsip Project** membuka daftar arsip lama dalam dialog read-only (tidak bisa diedit/disimpan ulang), dengan tombol Print / Simpan sebagai PDF untuk kebutuhan bagikan ke klien.
 
 ## Catatan desain
 
@@ -54,3 +59,4 @@ Alternatif: gunakan [`clasp`](https://github.com/google/clasp) — file `src/app
 - Level harus naik tepat +1 per tingkat nesting (tidak boleh loncat, mis. dari Level 0 langsung ke Level 2) agar struktur induk/anak terbaca benar.
 - Gantt chart dibatasi 400 kolom hari (mode harian) atau 260 kolom minggu (mode mingguan, ~5 tahun) agar tetap dalam batas ukuran Google Sheets; proyek yang lebih panjang perlu dipecah menjadi beberapa fase.
 - Sheet `Resources` bersifat opsional secara teknis (kalau belum ada, semua Cost/Day tetap jalan tapi gaji dihitung 0) — tapi otomatis dibuat oleh Initialize, dan bisa ditambahkan kapan saja lewat menu tanpa perlu reset Tasks/Settings.
+- Arsip project (`.tla`) dienkripsi dengan kunci yang sebagian tersimpan langsung di kode `Archive.gs` (`ARCHIVE_APP_SECRET`). Ini cukup untuk mencegah orang awam membuka/menyalin data lama di luar Timelinea, tapi **bukan** proteksi terhadap orang yang cukup paham untuk membuka editor Apps Script dan membaca kode sumbernya sendiri. **Ganti nilai `ARCHIVE_APP_SECRET` ke string acak baru sebelum mendistribusikan/menjual salinan** — jangan pakai nilai bawaan dari repo ini.
