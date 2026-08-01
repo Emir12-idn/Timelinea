@@ -24,6 +24,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Setup / Reset Resources Sheet', 'addResourcesSheet')
     .addItem('Setup / Reset Settings Sheet', 'addSettingsSheet')
+    .addItem('Setup / Reset Pembelian Bahan Sheet', 'addPurchasesSheet')
     .addItem('Setup / Reset Issues Sheet (HAPUS riwayat masalah)', 'addIssuesSheet')
     .addSeparator()
     .addItem('Aktifkan Peringatan Kolom Otomatis', 'refreshAutoColumnWarnings')
@@ -35,6 +36,8 @@ function onOpen() {
     .addItem('Add Sub-task (below selected row)', 'addSubtaskRow')
     .addItem('Pilih Assigned To (Multi-pilih)', 'openAssignDialog')
     .addItem('Add Resource Row', 'addResourceRow')
+    .addSeparator()
+    .addItem('Tambah Pembelian Bahan', 'addPurchaseRow')
     .addSeparator()
     .addItem('Catat Masalah (Issue Log)', 'logIssue')
     .addSeparator()
@@ -133,6 +136,8 @@ function showAbout() {
     'Untuk isi "Assigned To" (bisa lebih dari satu orang per task), pilih baris task-nya lalu klik "👤" di kolom\n' +
     '"+ / ↓ / -" (atau lewat Timelinea > Pilih Assigned To) — muncul pop-up centang nama dari sheet "Resources".\n' +
     'Gaji tiap orang (Rate/Day × total hari kerjanya) otomatis terhitung di sheet Resources.\n' +
+    'Beli bahan/barang untuk suatu task? Catat di sheet "Pembelian Bahan" (Timelinea > Tambah Pembelian Bahan) —\n' +
+    'pilih task-nya dari dropdown, isi Keterangan dan Harga; totalnya otomatis masuk ke Planned Cost task itu.\n' +
     'Timelinea otomatis menghitung ulang jadwal, cost, jalur kritis, dan Gantt chart setiap Anda mengedit,\n' +
     'atau lewat menu Timelinea > Recalculate / Refresh.\n' +
     'Tidak perlu buka menu Timelinea tiap mau tambah/hapus baris — klik sel di kolom "+ / ↓ / -" (tepat di\n' +
@@ -195,8 +200,10 @@ function initializeTimelineaHeadless() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   setupSettingsSheet_(ss);
   setupResourcesSheet_(ss);
+  setupPurchasesSheet_(ss);
   if (!ss.getSheetByName(ISSUES_SHEET)) setupIssuesSheet_(ss); // preserved across re-Initialize; see setupIssuesSheet_
   setupTasksSheet_(ss);
+  applyPurchaseTaskDropdown_(ss); // Tasks sheet was just recreated, so re-point the Purchases dropdown at it
   drawGanttChart();
 }
 
@@ -396,6 +403,96 @@ function addIssuesSheet() {
     if (response !== ui.Button.YES) return;
   }
   setupIssuesSheet_(ss);
+}
+
+/**
+ * Pembelian Bahan: a separate sheet, deliberately simple — just pick the
+ * task, describe the item, enter its price. "Untuk Task" is a dropdown
+ * sourced live from the Tasks Task Name column, so the sheet itself is
+ * where you say which task a purchase belongs to (no need to pre-select
+ * anything in Tasks first). Total per task is summed by readPurchaseTotals_
+ * in Scheduler.gs and rolled into that task's Planned/Actual Cost.
+ */
+function setupPurchasesSheet_(ss) {
+  var sheet = ss.getSheetByName(PURCHASES_SHEET);
+  if (sheet) ss.deleteSheet(sheet);
+  sheet = ss.insertSheet(PURCHASES_SHEET);
+
+  sheet.getRange(1, 1, 1, PURCHASES_HEADER.length).setValues([PURCHASES_HEADER])
+    .setFontWeight('bold').setFontColor(COLOR.HEADER_ROW_TEXT).setBackground(COLOR.HEADER_ROW_BG)
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 28);
+  sheet.setFrozenRows(1);
+
+  sheet.getRange(2, PURCHASES_COL.HARGA, 500, 1).setNumberFormat('"Rp"#,##0');
+
+  var widths = [40, 220, 260, 110];
+  widths.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  var dataRange = sheet.getRange(2, 1, 498, PURCHASES_HEADER.length);
+  sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=ISEVEN(ROW())')
+      .setBackground(COLOR.ZEBRA_ROW_BG)
+      .setRanges([dataRange])
+      .build()
+  ]);
+
+  applyPurchaseTaskDropdown_(ss);
+}
+
+/**
+ * Re-points the "Untuk Task" dropdown at the current Tasks Task Name
+ * column. Separate from setup so it can be re-applied whenever Tasks is
+ * rebuilt (Initialize deletes and recreates that sheet, which would
+ * otherwise leave this dropdown pointing at a range that no longer exists).
+ */
+function applyPurchaseTaskDropdown_(ss) {
+  var purchasesSheet = ss.getSheetByName(PURCHASES_SHEET);
+  var tasksSheet = ss.getSheetByName(TASKS_SHEET);
+  if (!purchasesSheet || !tasksSheet) return;
+  var nameRange = tasksSheet.getRange(2, COL.NAME, 500, 1);
+  purchasesSheet.getRange(2, PURCHASES_COL.TASK_NAME, 498, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInRange(nameRange, true).setAllowInvalid(true).build());
+}
+
+/** Creates (or resets) just the Purchases sheet, without touching Tasks/Settings/Resources/Issues. */
+function addPurchasesSheet() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName(PURCHASES_SHEET)) {
+    var response = ui.alert(
+      'Setup Pembelian Bahan Sheet',
+      'Sheet "Pembelian Bahan" sudah ada. Ini akan MENGHAPUS semua catatan pembelian yang sudah ada di sana. Lanjutkan?',
+      ui.ButtonSet.YES_NO);
+    if (response !== ui.Button.YES) return;
+  }
+  setupPurchasesSheet_(ss);
+  runCalculateSchedule();
+}
+
+function nextPurchaseId_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var ids = lastRow >= 2
+    ? sheet.getRange(2, PURCHASES_COL.ID, lastRow - 1, 1).getValues().flat().filter(function (v) { return v !== ''; })
+    : [];
+  return ids.length ? Math.max.apply(null, ids) + 1 : 1;
+}
+
+/** Appends a blank purchase row — pick the task from the dropdown, then fill in Keterangan and Harga directly. */
+function addPurchaseRow() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(PURCHASES_SHEET);
+  if (!sheet) {
+    ui.alert('Jalankan Timelinea > Reset & Setup > Setup / Reset Pembelian Bahan Sheet dulu.');
+    return;
+  }
+  var newRow = sheet.getLastRow() + 1;
+  sheet.getRange(newRow, PURCHASES_COL.ID).setValue(nextPurchaseId_(sheet));
+  sheet.getRange(newRow, PURCHASES_COL.HARGA).setNumberFormat('"Rp"#,##0');
+  ss.setActiveSheet(sheet);
+  sheet.setActiveSelection(sheet.getRange(newRow, PURCHASES_COL.TASK_NAME));
 }
 
 function nextIssueId_(sheet) {

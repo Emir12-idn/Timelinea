@@ -135,6 +135,30 @@ function readOpenIssueTaskIds_(ss) {
 }
 
 /**
+ * Sums Harga per task (matched by Task Name — the Pembelian Bahan sheet is
+ * cleared on every "Mulai Project Baru", so unlike Issues there's no old
+ * project's task still around with the same name to collide with) so
+ * material/goods purchases roll into that task's Planned/Actual Cost
+ * alongside labor cost and Cost/Day. Optional — returns {} if the sheet
+ * doesn't exist.
+ */
+function readPurchaseTotals_(ss) {
+  var sheet = ss.getSheetByName(PURCHASES_SHEET);
+  if (!sheet) return {};
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return {};
+  var taskNames = sheet.getRange(2, PURCHASES_COL.TASK_NAME, lastRow - 1, 1).getValues();
+  var harga = sheet.getRange(2, PURCHASES_COL.HARGA, lastRow - 1, 1).getValues();
+  var sums = {};
+  taskNames.forEach(function (row, i) {
+    var name = row[0];
+    if (!name) return;
+    sums[name] = (sums[name] || 0) + (Number(harga[i][0]) || 0);
+  });
+  return sums;
+}
+
+/**
  * Writes each resource's assigned task list, total allocated days, and
  * total pay (rate/day × total days) back into the Resources sheet.
  */
@@ -300,23 +324,17 @@ function computeCriticalPath_(leafTasks, byId, order, successors, settings) {
 /**
  * Planned/actual cost for a leaf task = labor cost (each assignee's
  * Rate/Day × effective days, from the Resources sheet) + Cost/Day ×
- * effective days (materials/equipment). Milestones are always a flat
- * one-day cost for BOTH parts — previously only Cost/Day was flattened for
- * milestones while labor cost still multiplied by whatever Duration
- * happened to be left in the cell (e.g. a task with Duration 5 that got
- * checked as Milestone afterward, without also zeroing Duration), so an
- * assignee's cost could silently be 5x too high on a milestone. Assignee
- * names not found in Resources are collected into unknownNames (by
- * reference) so calculateSchedule can warn about typos.
- *
- * For itemized material/goods costs (e.g. a task like "Beli Bahan
- * Besi/Baja" covering several different items), add them as SUBTASKS of
- * that task instead of a separate sheet — a subtask named for the item
- * (e.g. "Besi 6m x 10") with Duration 1 and Cost/Day set to that item's
- * total price rolls straight into the parent's Planned Cost through the
- * existing summary rollup in computeRollups_, no extra linking needed.
+ * effective days (flat materials/equipment estimate) + Pembelian Bahan
+ * total for this task (readPurchaseTotals_ — itemized purchases, e.g. a
+ * task like "Beli Bahan Besi/Baja" covering several different items).
+ * Milestones are always a flat one-day cost for the labor/Cost-per-Day
+ * parts — previously only Cost/Day was flattened for milestones while
+ * labor cost still multiplied by whatever Duration happened to be left in
+ * the cell, so an assignee's cost could silently be several times too high
+ * on a milestone. Assignee names not found in Resources are collected into
+ * unknownNames (by reference) so calculateSchedule can warn about typos.
  */
-function computeLeafCost_(t, rateByName, unknownNames) {
+function computeLeafCost_(t, rateByName, unknownNames, purchaseTotal) {
   var effectiveDays = t.milestone ? 1 : Math.max(t.duration, 1);
   var laborCost = t.assignees.reduce(function (sum, name) {
     var key = name.toLowerCase();
@@ -324,7 +342,7 @@ function computeLeafCost_(t, rateByName, unknownNames) {
     return sum + rateByName[key] * effectiveDays;
   }, 0);
   var flatCost = t.costRate * effectiveDays;
-  t.plannedCost = laborCost + flatCost;
+  t.plannedCost = laborCost + flatCost + (purchaseTotal || 0);
   t.actualCost = t.plannedCost * (Math.min(Math.max(t.pctComplete, 0), 100) / 100);
 }
 
@@ -447,7 +465,8 @@ function calculateSchedule() {
   var rateByName = {};
   resourceRows.forEach(function (r) { rateByName[r.name.toLowerCase()] = r.rate; });
   var unknownNames = {};
-  leafTasks.forEach(function (t) { computeLeafCost_(t, rateByName, unknownNames); });
+  var purchaseTotals = readPurchaseTotals_(ss);
+  leafTasks.forEach(function (t) { computeLeafCost_(t, rateByName, unknownNames, purchaseTotals[t.name]); });
 
   computeRollups_(tasks, settings);
 

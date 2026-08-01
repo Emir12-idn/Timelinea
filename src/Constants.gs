@@ -88,6 +88,24 @@ var RESOURCES_HEADER = [
   'Name', 'Rate/Day', 'Role', 'Assigned Tasks', 'Total Days Allocated', 'Total Pay'
 ];
 
+// Simple, separate sheet for material/goods purchases — deliberately just
+// three fields (pick the task, describe the item, its price), not a
+// structured Qty/Satuan/Harga Satuan/Total layout. Matched to Tasks by name
+// only (not id+name like Issues): this sheet is reset on every "Mulai
+// Project Baru" (see startNewProject in Archive.gs), so there's no old-
+// project task with the same name still around to collide with.
+var PURCHASES_SHEET = 'Pembelian Bahan';
+var PURCHASES_COL = {
+  ID: 1,
+  TASK_NAME: 2,
+  KETERANGAN: 3,
+  HARGA: 4
+};
+
+var PURCHASES_HEADER = [
+  'ID', 'Untuk Task', 'Keterangan (Nama Barang)', 'Harga'
+];
+
 var GANTT_MAX_DAYS = 400;                 // hard cap when rendering one column per day
 var GANTT_WEEK_VIEW_THRESHOLD_DAYS = 45;  // beyond this span, switch to one column per week
 var GANTT_MAX_WEEKS = 260;                // ~5 years, hard cap when rendering one column per week

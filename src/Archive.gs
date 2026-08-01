@@ -95,6 +95,7 @@ function archiveCurrentProject_(projectLabel) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tasksSheet = ss.getSheetByName(TASKS_SHEET);
   var resourcesSheet = ss.getSheetByName(RESOURCES_SHEET);
+  var purchasesSheet = ss.getSheetByName(PURCHASES_SHEET);
   var settingsSheet = ss.getSheetByName(SETTINGS_SHEET);
 
   var snapshot = {
@@ -102,6 +103,7 @@ function archiveCurrentProject_(projectLabel) {
     archivedAt: new Date().toISOString(),
     tasks: tasksSheet ? snapshotSheetData_(tasksSheet) : null,
     resources: resourcesSheet ? snapshotSheetData_(resourcesSheet) : null,
+    purchases: purchasesSheet ? snapshotSheetData_(purchasesSheet) : null,
     settingsNote: settingsSheet ? {
       projectStart: settingsSheet.getRange(SETTINGS.PROJECT_START).getDisplayValue(),
       totalPlanned: settingsSheet.getRange(SETTINGS.TOTAL_PLANNED_COST).getDisplayValue(),
@@ -149,6 +151,15 @@ function startNewProject() {
     }
   }
   clearGanttArea_(tasksSheet);
+
+  // Purchases are matched to Tasks by name, and a fresh project starts
+  // with an empty Tasks sheet — old purchase rows would just be orphaned
+  // dead weight (already captured in the archive above), so clear them too.
+  var purchasesSheet = ss.getSheetByName(PURCHASES_SHEET);
+  if (purchasesSheet) {
+    var purchasesLastRow = purchasesSheet.getLastRow();
+    if (purchasesLastRow > 1) purchasesSheet.getRange(2, 1, purchasesLastRow - 1, PURCHASES_HEADER.length).clearContent();
+  }
 
   var settingsSheet = ss.getSheetByName(SETTINGS_SHEET);
   if (settingsSheet) settingsSheet.getRange(SETTINGS.PROJECT_START).setValue(stripTime_(new Date()));
@@ -213,5 +224,6 @@ function getArchiveHtml(fileId) {
   }
   html += '<h3>Tasks</h3>' + archiveTableHtml_(snapshot.tasks);
   html += '<h3>Resources</h3>' + archiveTableHtml_(snapshot.resources);
+  html += '<h3>Pembelian Bahan</h3>' + archiveTableHtml_(snapshot.purchases);
   return html;
 }
