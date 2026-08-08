@@ -12,19 +12,33 @@
 const SHEET_NAME = 'Transaksi';
 const SHEET_HEADERS = [
   'Timestamp', 'Tanggal Transaksi', 'Jumlah (Rp)', 'Kategori',
-  'Penerima/Tujuan', 'Bank/Metode', 'No Referensi', 'Deskripsi',
-  'Sumber', 'Link Bukti', 'Pesan Asli'
+  'Penerima/Tujuan', 'Bank/Metode', 'No Rekening Tujuan', 'No Referensi',
+  'Deskripsi', 'Sumber', 'Link Bukti', 'Pesan Asli'
 ];
+
+const SELF_TRANSFER_CATEGORY = 'Transfer Antar Rekening Sendiri';
 
 const KATEGORI_LIST = [
   'Makanan & Minuman', 'Transportasi', 'Tagihan & Utilitas',
   'Transfer/Kirim Uang', 'Belanja', 'Hiburan', 'Kesehatan',
-  'Pendidikan', 'Lainnya'
+  'Pendidikan', SELF_TRANSFER_CATEGORY, 'Lainnya'
 ];
 
 function getProp_(key, fallback) {
   const v = PropertiesService.getScriptProperties().getProperty(key);
   return v || fallback;
+}
+
+function normalizeDigits_(s) {
+  return (s || '').toString().replace(/\D/g, '');
+}
+
+// Rekening milik sendiri (Script Property OWN_ACCOUNTS, dipisah koma) supaya
+// transfer antar rekening sendiri tidak ikut dihitung sebagai pengeluaran.
+function getOwnAccounts_() {
+  const raw = getProp_('OWN_ACCOUNTS', '');
+  if (!raw) return [];
+  return raw.split(',').map(normalizeDigits_).filter(Boolean);
 }
 
 function checkAccess_(token) {
@@ -154,6 +168,7 @@ function extractTransactionWithAI_(text, imageBlob) {
     '"kategori":"<salah satu dari: ' + KATEGORI_LIST.join(', ') + '>",' +
     '"penerima_tujuan":"<nama penerima atau tujuan transaksi>",' +
     '"bank_metode":"<nama bank/metode pembayaran>",' +
+    '"nomor_rekening_tujuan":"<nomor rekening tujuan, hanya digit tanpa spasi/strip, kosongkan jika tidak ada>",' +
     '"referensi":"<nomor referensi jika ada, kalau tidak ada string kosong>",' +
     '"deskripsi":"<ringkasan singkat 1 kalimat>"}\n' +
     'Kalau tanggal tidak disebutkan, pakai tanggal hari ini: ' + today + '. ' +
@@ -210,6 +225,13 @@ function extractTransactionWithAI_(text, imageBlob) {
   }
 
   data.jumlah = Number(data.jumlah) || 0;
+
+  const ownAccounts = getOwnAccounts_();
+  const destDigits = normalizeDigits_(data.nomor_rekening_tujuan);
+  if (ownAccounts.length && destDigits && ownAccounts.indexOf(destDigits) !== -1) {
+    data.kategori = SELF_TRANSFER_CATEGORY;
+  }
+
   if (KATEGORI_LIST.indexOf(data.kategori) === -1) data.kategori = 'Lainnya';
   return data;
 }
@@ -218,8 +240,8 @@ function appendToSheet_(data, sender, driveUrl, rawText) {
   const sheet = getSheet_();
   const row = [
     new Date(), data.tanggal || '', data.jumlah || 0, data.kategori || 'Lainnya',
-    data.penerima_tujuan || '', data.bank_metode || '', data.referensi || '',
-    data.deskripsi || '', sender || '', driveUrl || '', rawText || ''
+    data.penerima_tujuan || '', data.bank_metode || '', data.nomor_rekening_tujuan || '',
+    data.referensi || '', data.deskripsi || '', sender || '', driveUrl || '', rawText || ''
   ];
   sheet.appendRow(row);
   return sheet.getLastRow();
@@ -233,6 +255,9 @@ function formatConfirmation_(data, driveUrl) {
     (data.bank_metode ? 'Via: ' + data.bank_metode + '\n' : '') +
     (data.tanggal ? 'Tanggal: ' + data.tanggal + '\n' : '');
   if (driveUrl) msg += 'Bukti: ' + driveUrl + '\n';
+  if (data.kategori === SELF_TRANSFER_CATEGORY) {
+    msg += '(Terdeteksi pindah ke rekening sendiri, tidak dihitung sebagai pengeluaran)\n';
+  }
   msg += '\nKetik "laporan bulan ini" untuk lihat rekap.';
   return msg;
 }
@@ -265,11 +290,18 @@ function generateReport_(command) {
 
   const byCategory = {};
   let total = 0;
+  let selfTransferTotal = 0;
+  let selfTransferCount = 0;
   rows.forEach(function (r) {
     const ts = r[0] instanceof Date ? r[0] : new Date(r[0]);
     if (ts < start || ts >= end) return;
     const jumlah = Number(r[2]) || 0;
     const kategori = r[3] || 'Lainnya';
+    if (kategori === SELF_TRANSFER_CATEGORY) {
+      selfTransferTotal += jumlah;
+      selfTransferCount += 1;
+      return; // pindah antar rekening sendiri, bukan pengeluaran
+    }
     total += jumlah;
     byCategory[kategori] = byCategory[kategori] || { total: 0, count: 0 };
     byCategory[kategori].total += jumlah;
@@ -285,18 +317,22 @@ function generateReport_(command) {
 
   if (sorted.length === 0) {
     msg += 'Belum ada transaksi tercatat di periode ini.';
-    return msg;
+  } else {
+    sorted.forEach(function (kat) {
+      const info = byCategory[kat];
+      msg += '- ' + kat + ': Rp ' + info.total.toLocaleString('id-ID') + ' (' + info.count + 'x)\n';
+    });
+
+    const top = sorted[0];
+    const topPct = Math.round((byCategory[top].total / total) * 100);
+    msg += '\n💡 Kategori terbesar: ' + top + ' (' + topPct + '% dari total). ' +
+      'Coba pantau/kurangi pengeluaran di kategori ini bulan depan.';
   }
 
-  sorted.forEach(function (kat) {
-    const info = byCategory[kat];
-    msg += '- ' + kat + ': Rp ' + info.total.toLocaleString('id-ID') + ' (' + info.count + 'x)\n';
-  });
-
-  const top = sorted[0];
-  const topPct = Math.round((byCategory[top].total / total) * 100);
-  msg += '\n💡 Kategori terbesar: ' + top + ' (' + topPct + '% dari total). ' +
-    'Coba pantau/kurangi pengeluaran di kategori ini bulan depan.';
+  if (selfTransferCount > 0) {
+    msg += '\n🔁 Pindah antar rekening sendiri: Rp ' + selfTransferTotal.toLocaleString('id-ID') +
+      ' (' + selfTransferCount + 'x) — tidak dihitung sebagai pengeluaran.';
+  }
 
   return msg;
 }

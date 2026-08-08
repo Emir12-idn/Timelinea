@@ -36,6 +36,11 @@ Di Apps Script editor: **Project Settings → Script Properties → Add script p
 | `SPREADSHEET_ID` | Opsional | ID dari langkah 1 (kalau kosong, pakai spreadsheet aktif) |
 | `DRIVE_FOLDER_ID` | Opsional | ID folder Drive untuk simpan foto bukti (kalau kosong, dibuat otomatis: "Timelinea - Bukti Transaksi") |
 | `ACCESS_TOKEN` | Opsional (disarankan) | Password sederhana biar link upload kamu tidak dipakai orang lain. Kalau diisi, form web akan minta token ini. |
+| `OWN_ACCOUNTS` | Opsional (disarankan) | Nomor rekening kamu sendiri, dipisah koma, contoh: `6610415499,1330030005094`. Kalau nomor rekening tujuan di suatu transaksi cocok dengan salah satu nomor ini, transaksi otomatis dianggap **pindah antar rekening sendiri** (bukan pengeluaran) dan tidak ikut dihitung di total laporan. |
+
+> Jangan simpan nomor rekening/API key di dalam file kode yang di-commit ke Git — isi
+> semuanya lewat Script Properties di atas, yang tersimpan privat di project Apps Script
+> kamu sendiri, bukan di repo.
 
 ## 5. Deploy sebagai Web App
 
@@ -71,9 +76,15 @@ gateway tersebut ke field yang dipakai di `doPost`.
 ## Kategori yang dipakai AI
 
 `Makanan & Minuman`, `Transportasi`, `Tagihan & Utilitas`, `Transfer/Kirim Uang`,
-`Belanja`, `Hiburan`, `Kesehatan`, `Pendidikan`, `Lainnya`.
+`Belanja`, `Hiburan`, `Kesehatan`, `Pendidikan`, `Transfer Antar Rekening Sendiri`,
+`Lainnya`.
+
+Kategori `Transfer Antar Rekening Sendiri` otomatis dipakai kalau nomor rekening
+tujuan cocok dengan salah satu nomor di `OWN_ACCOUNTS`, dan tidak ikut dihitung
+sebagai pengeluaran di laporan.
 
 ## Kolom di Google Sheet
 
 `Timestamp`, `Tanggal Transaksi`, `Jumlah (Rp)`, `Kategori`, `Penerima/Tujuan`,
-`Bank/Metode`, `No Referensi`, `Deskripsi`, `Sumber`, `Link Bukti`, `Pesan Asli`.
+`Bank/Metode`, `No Rekening Tujuan`, `No Referensi`, `Deskripsi`, `Sumber`,
+`Link Bukti`, `Pesan Asli`.
