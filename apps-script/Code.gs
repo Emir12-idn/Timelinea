@@ -12,17 +12,21 @@
 const SHEET_NAME = 'Transaksi';
 const SHEET_HEADERS = [
   'Timestamp', 'Tanggal Transaksi', 'Jumlah (Rp)', 'Kategori',
-  'Penerima/Tujuan', 'Bank/Metode', 'No Rekening Tujuan', 'No Referensi',
-  'Deskripsi', 'Sumber', 'Link Bukti', 'Pesan Asli'
+  'Pihak Lain', 'Bank/Metode', 'No Rekening Lawan', 'No Referensi',
+  'Deskripsi', 'Sumber', 'Link Bukti', 'Pesan Asli', 'Arah'
 ];
+const ARAH_COL_INDEX = SHEET_HEADERS.indexOf('Arah');
 
 const SELF_TRANSFER_CATEGORY = 'Transfer Antar Rekening Sendiri';
 
-const KATEGORI_LIST = [
+const KATEGORI_KELUAR = [
   'Makanan & Minuman', 'Transportasi', 'Tagihan & Utilitas',
-  'Transfer/Kirim Uang', 'Belanja', 'Hiburan', 'Kesehatan',
-  'Pendidikan', SELF_TRANSFER_CATEGORY, 'Lainnya'
+  'Transfer/Kirim Uang', 'Belanja', 'Hiburan', 'Kesehatan', 'Pendidikan'
 ];
+const KATEGORI_MASUK = [
+  'Gaji', 'Bonus/Hadiah', 'Penjualan/Usaha', 'Pinjaman Diterima', 'Pemasukan Lainnya'
+];
+const KATEGORI_LIST = KATEGORI_KELUAR.concat(KATEGORI_MASUK, [SELF_TRANSFER_CATEGORY, 'Lainnya']);
 
 function getProp_(key, fallback) {
   const v = PropertiesService.getScriptProperties().getProperty(key);
@@ -55,8 +59,20 @@ function getSheet_() {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(SHEET_HEADERS);
     sheet.setFrozenRows(1);
+  } else {
+    migrateHeaders_(sheet);
   }
   return sheet;
+}
+
+// Menambahkan kolom header baru di akhir untuk sheet lama, tanpa mengubah
+// posisi kolom yang sudah ada (supaya data lama tidak bergeser).
+function migrateHeaders_(sheet) {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < SHEET_HEADERS.length) {
+    const missing = SHEET_HEADERS.slice(lastCol);
+    sheet.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+  }
 }
 
 function getOrCreateFolder_() {
@@ -165,12 +181,19 @@ function extractTransactionWithAI_(text, imageBlob) {
     'transfer bank Indonesia yang diberikan, ekstrak informasi transaksi. Balas HANYA dengan JSON ' +
     'valid tanpa markdown/tanpa penjelasan tambahan, dengan struktur persis:\n' +
     '{"tanggal":"YYYY-MM-DD","jumlah":<angka rupiah tanpa titik/koma>,' +
-    '"kategori":"<salah satu dari: ' + KATEGORI_LIST.join(', ') + '>",' +
-    '"penerima_tujuan":"<nama penerima atau tujuan transaksi>",' +
+    '"arah":"<masuk jika uang MASUK/diterima ke rekening pengguna, keluar jika uang KELUAR/dikirim dari rekening pengguna>",' +
+    '"kategori":"<kalau arah=keluar pilih salah satu dari: ' + KATEGORI_KELUAR.join(', ') +
+    '. Kalau arah=masuk pilih salah satu dari: ' + KATEGORI_MASUK.join(', ') + '>",' +
+    '"pihak_lain":"<nama pengirim uang jika arah=masuk, atau nama penerima uang jika arah=keluar>",' +
     '"bank_metode":"<nama bank/metode pembayaran>",' +
-    '"nomor_rekening_tujuan":"<nomor rekening tujuan, hanya digit tanpa spasi/strip, kosongkan jika tidak ada>",' +
+    '"nomor_rekening_lawan":"<nomor rekening pihak lain (pengirim jika arah=masuk, penerima jika arah=keluar), hanya digit tanpa spasi/strip, kosongkan jika tidak ada>",' +
     '"referensi":"<nomor referensi jika ada, kalau tidak ada string kosong>",' +
     '"deskripsi":"<ringkasan singkat 1 kalimat>"}\n' +
+    'Petunjuk membaca bukti: kalau struk/pesan menunjukkan "Transfer Berhasil"/"Terkirim"/"Pembayaran' +
+    ' Berhasil" dari sudut pandang pengirim (ada "Rekening Sumber"/"Dari Rekening" milik pengguna dan ' +
+    '"Penerima"/"Rekening Tujuan" pihak lain), maka arah="keluar". Kalau menunjukkan notifikasi/mutasi ' +
+    '"uang masuk"/"menerima transfer"/"kredit" ke rekening pengguna, maka arah="masuk". Kalau ragu, ' +
+    'gunakan konteks teks yang ditulis pengguna.\n' +
     'Kalau tanggal tidak disebutkan, pakai tanggal hari ini: ' + today + '. ' +
     'Kalau suatu data tidak ditemukan, isi dengan string kosong (jumlah isi 0).';
 
@@ -218,17 +241,18 @@ function extractTransactionWithAI_(text, imageBlob) {
     data = JSON.parse(content);
   } catch (parseErr) {
     data = {
-      tanggal: today, jumlah: 0, kategori: 'Lainnya',
-      penerima_tujuan: '', bank_metode: '', referensi: '',
+      tanggal: today, jumlah: 0, arah: '', kategori: 'Lainnya',
+      pihak_lain: '', bank_metode: '', nomor_rekening_lawan: '', referensi: '',
       deskripsi: text || 'Tidak berhasil dibaca otomatis, cek foto bukti.'
     };
   }
 
   data.jumlah = Number(data.jumlah) || 0;
+  data.arah = (data.arah || '').toString().trim().toLowerCase() === 'masuk' ? 'masuk' : 'keluar';
 
   const ownAccounts = getOwnAccounts_();
-  const destDigits = normalizeDigits_(data.nomor_rekening_tujuan);
-  if (ownAccounts.length && destDigits && ownAccounts.indexOf(destDigits) !== -1) {
+  const lawanDigits = normalizeDigits_(data.nomor_rekening_lawan);
+  if (ownAccounts.length && lawanDigits && ownAccounts.indexOf(lawanDigits) !== -1) {
     data.kategori = SELF_TRANSFER_CATEGORY;
   }
 
@@ -240,8 +264,9 @@ function appendToSheet_(data, sender, driveUrl, rawText) {
   const sheet = getSheet_();
   const row = [
     new Date(), data.tanggal || '', data.jumlah || 0, data.kategori || 'Lainnya',
-    data.penerima_tujuan || '', data.bank_metode || '', data.nomor_rekening_tujuan || '',
-    data.referensi || '', data.deskripsi || '', sender || '', driveUrl || '', rawText || ''
+    data.pihak_lain || '', data.bank_metode || '', data.nomor_rekening_lawan || '',
+    data.referensi || '', data.deskripsi || '', sender || '', driveUrl || '', rawText || '',
+    data.arah || 'keluar'
   ];
   sheet.appendRow(row);
   return sheet.getLastRow();
@@ -249,14 +274,16 @@ function appendToSheet_(data, sender, driveUrl, rawText) {
 
 function formatConfirmation_(data, driveUrl) {
   const rupiah = 'Rp ' + Number(data.jumlah || 0).toLocaleString('id-ID');
-  let msg = '✅ Tercatat!\n' +
+  const isMasuk = data.arah === 'masuk';
+  const arahLabel = isMasuk ? '🟢 Uang Masuk' : '🔴 Uang Keluar';
+  let msg = '✅ Tercatat! ' + arahLabel + '\n' +
     rupiah + ' - ' + (data.kategori || 'Lainnya') + '\n' +
-    (data.penerima_tujuan ? 'Ke: ' + data.penerima_tujuan + '\n' : '') +
+    (data.pihak_lain ? (isMasuk ? 'Dari: ' : 'Ke: ') + data.pihak_lain + '\n' : '') +
     (data.bank_metode ? 'Via: ' + data.bank_metode + '\n' : '') +
     (data.tanggal ? 'Tanggal: ' + data.tanggal + '\n' : '');
   if (driveUrl) msg += 'Bukti: ' + driveUrl + '\n';
   if (data.kategori === SELF_TRANSFER_CATEGORY) {
-    msg += '(Terdeteksi pindah ke rekening sendiri, tidak dihitung sebagai pengeluaran)\n';
+    msg += '(Terdeteksi pindah antar rekening sendiri, tidak dihitung sebagai pengeluaran/pemasukan)\n';
   }
   msg += '\nKetik "laporan bulan ini" untuk lihat rekap.';
   return msg;
@@ -289,20 +316,28 @@ function generateReport_(command) {
   const rows = values.slice(1);
 
   const byCategory = {};
-  let total = 0;
+  let pengeluaran = 0;
+  let pemasukan = 0;
   let selfTransferTotal = 0;
   let selfTransferCount = 0;
+
   rows.forEach(function (r) {
     const ts = r[0] instanceof Date ? r[0] : new Date(r[0]);
     if (ts < start || ts >= end) return;
     const jumlah = Number(r[2]) || 0;
     const kategori = r[3] || 'Lainnya';
+    const arah = (r[ARAH_COL_INDEX] || '').toString().toLowerCase();
+
     if (kategori === SELF_TRANSFER_CATEGORY) {
       selfTransferTotal += jumlah;
       selfTransferCount += 1;
-      return; // pindah antar rekening sendiri, bukan pengeluaran
+      return; // pindah antar rekening sendiri, bukan pengeluaran/pemasukan
     }
-    total += jumlah;
+    if (arah === 'masuk') {
+      pemasukan += jumlah;
+      return;
+    }
+    pengeluaran += jumlah;
     byCategory[kategori] = byCategory[kategori] || { total: 0, count: 0 };
     byCategory[kategori].total += jumlah;
     byCategory[kategori].count += 1;
@@ -312,26 +347,29 @@ function generateReport_(command) {
     return byCategory[b].total - byCategory[a].total;
   });
 
-  let msg = '📊 Laporan Pengeluaran - ' + label + '\n';
-  msg += 'Total: Rp ' + total.toLocaleString('id-ID') + '\n\n';
+  let msg = '📊 Laporan - ' + label + '\n';
+  msg += 'Pemasukan: Rp ' + pemasukan.toLocaleString('id-ID') + '\n';
+  msg += 'Pengeluaran: Rp ' + pengeluaran.toLocaleString('id-ID') + '\n';
+  msg += 'Selisih: Rp ' + (pemasukan - pengeluaran).toLocaleString('id-ID') + '\n\n';
 
   if (sorted.length === 0) {
-    msg += 'Belum ada transaksi tercatat di periode ini.';
+    msg += 'Belum ada pengeluaran tercatat di periode ini.';
   } else {
+    msg += 'Rincian pengeluaran per kategori:\n';
     sorted.forEach(function (kat) {
       const info = byCategory[kat];
       msg += '- ' + kat + ': Rp ' + info.total.toLocaleString('id-ID') + ' (' + info.count + 'x)\n';
     });
 
     const top = sorted[0];
-    const topPct = Math.round((byCategory[top].total / total) * 100);
-    msg += '\n💡 Kategori terbesar: ' + top + ' (' + topPct + '% dari total). ' +
+    const topPct = Math.round((byCategory[top].total / pengeluaran) * 100);
+    msg += '\n💡 Kategori pengeluaran terbesar: ' + top + ' (' + topPct + '% dari total pengeluaran). ' +
       'Coba pantau/kurangi pengeluaran di kategori ini bulan depan.';
   }
 
   if (selfTransferCount > 0) {
     msg += '\n🔁 Pindah antar rekening sendiri: Rp ' + selfTransferTotal.toLocaleString('id-ID') +
-      ' (' + selfTransferCount + 'x) — tidak dihitung sebagai pengeluaran.';
+      ' (' + selfTransferCount + 'x) — tidak dihitung sebagai pengeluaran/pemasukan.';
   }
 
   return msg;
@@ -357,11 +395,11 @@ function buildUploadFormHtml_() {
     'pre{white-space:pre-wrap;background:#f0fdf4;padding:12px;border-radius:8px;font-size:13px;}',
     '.err{background:#fef2f2;color:#b91c1c;}',
     '</style></head><body>',
-    '<h1>📷 Catat Pengeluaran</h1>',
+    '<h1>📷 Catat Transaksi</h1>',
     '<div class="card">',
     '<form id="f">',
     '<input type="file" id="img" accept="image/*" capture="environment">',
-    '<textarea id="txt" placeholder="Catatan opsional, contoh: makan siang 50rb Mandiri"></textarea>',
+    '<textarea id="txt" placeholder="Catatan opsional, contoh: makan siang 50rb Mandiri, atau gaji bulan ini masuk 5jt"></textarea>',
     '<button type="submit">Simpan Transaksi</button>',
     '</form>',
     '<div id="result"></div>',
@@ -413,5 +451,7 @@ function buildUploadFormHtml_() {
 
 function setup() {
   getSheet_();
-  Logger.log('Sheet siap. Jangan lupa isi Script Properties: GROQ_API_KEY, dan opsional SPREADSHEET_ID, DRIVE_FOLDER_ID, ACCESS_TOKEN.');
+  Logger.log('Sheet siap (header lama otomatis ditambah kolom baru kalau perlu). ' +
+    'Jangan lupa isi Script Properties: GROQ_API_KEY, dan opsional SPREADSHEET_ID, ' +
+    'DRIVE_FOLDER_ID, ACCESS_TOKEN, OWN_ACCOUNTS.');
 }

@@ -73,18 +73,39 @@ tanpa buka form web, tinggal pakai WhatsApp Gateway apa pun yang mendukung webho
 URL Web App ini. Tidak perlu ubah kode inti — cukup sesuaikan nama field JSON dari
 gateway tersebut ke field yang dipakai di `doPost`.
 
+## Uang masuk vs uang keluar
+
+Setiap transaksi otomatis diberi label **arah**: `masuk` (uang diterima) atau
+`keluar` (uang dikirim/dibelanjakan) — AI membaca ini dari konteks bukti
+(mis. "Transfer Berhasil" dari sisi pengirim = keluar, notifikasi "menerima
+transfer"/mutasi kredit = masuk). Laporan menampilkan **Pemasukan**,
+**Pengeluaran**, dan **Selisih** terpisah, dan rincian per kategori hanya
+dihitung dari sisi pengeluaran supaya "kategori paling boros" akurat.
+
+Kalau arah salah terbaca, tambahkan konteks di catatan teks saat upload,
+contoh: `gaji bulan ini masuk 5jt` atau `terima transfer dari Budi 200rb`.
+
 ## Kategori yang dipakai AI
 
-`Makanan & Minuman`, `Transportasi`, `Tagihan & Utilitas`, `Transfer/Kirim Uang`,
-`Belanja`, `Hiburan`, `Kesehatan`, `Pendidikan`, `Transfer Antar Rekening Sendiri`,
-`Lainnya`.
-
-Kategori `Transfer Antar Rekening Sendiri` otomatis dipakai kalau nomor rekening
-tujuan cocok dengan salah satu nomor di `OWN_ACCOUNTS`, dan tidak ikut dihitung
-sebagai pengeluaran di laporan.
+- Pengeluaran: `Makanan & Minuman`, `Transportasi`, `Tagihan & Utilitas`,
+  `Transfer/Kirim Uang`, `Belanja`, `Hiburan`, `Kesehatan`, `Pendidikan`.
+- Pemasukan: `Gaji`, `Bonus/Hadiah`, `Penjualan/Usaha`, `Pinjaman Diterima`,
+  `Pemasukan Lainnya`.
+- Netral: `Transfer Antar Rekening Sendiri` (otomatis dipakai kalau nomor
+  rekening lawan cocok dengan salah satu nomor di `OWN_ACCOUNTS`, tidak ikut
+  dihitung sebagai pengeluaran maupun pemasukan), `Lainnya`.
 
 ## Kolom di Google Sheet
 
-`Timestamp`, `Tanggal Transaksi`, `Jumlah (Rp)`, `Kategori`, `Penerima/Tujuan`,
-`Bank/Metode`, `No Rekening Tujuan`, `No Referensi`, `Deskripsi`, `Sumber`,
-`Link Bukti`, `Pesan Asli`.
+`Timestamp`, `Tanggal Transaksi`, `Jumlah (Rp)`, `Kategori`, `Pihak Lain`,
+`Bank/Metode`, `No Rekening Lawan`, `No Referensi`, `Deskripsi`, `Sumber`,
+`Link Bukti`, `Pesan Asli`, `Arah`.
+
+> Kalau sheet kamu sudah pernah dipakai sebelum kolom `Arah` ditambahkan,
+> jalankan fungsi `setup()` sekali dari Apps Script editor (atau tunggu
+> transaksi berikutnya) — kolom yang belum ada akan otomatis ditambahkan di
+> akhir tanpa menggeser data lama. Baris-baris lama yang sudah tercatat
+> sebelum update ini tidak punya nilai `Arah`, jadi akan dihitung sebagai
+> pengeluaran secara default di laporan — kalau ada yang sebenarnya uang
+> masuk, edit manual kolom `Kategori` dan `Arah` baris tersebut langsung di
+> Sheet.
