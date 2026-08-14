@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WireSim Web — Simulador de Automação Industrial</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- Brand header -->
+  <header class="brand-header">
+    <button class="icon-btn" id="btnHome" title="Início">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="brand-logo">
+      <svg viewBox="0 0 64 64" width="34" height="34">
+        <rect x="4" y="6" width="56" height="40" rx="4" fill="#1b2530" stroke="#0d84ff" stroke-width="2"/>
+        <circle cx="10" cy="12" r="1.6" fill="#ff5d5d"/>
+        <circle cx="15" cy="12" r="1.6" fill="#ffce54"/>
+        <circle cx="20" cy="12" r="1.6" fill="#38d67a"/>
+        <path d="M16 18v22" stroke="#0d84ff" stroke-width="3" stroke-linecap="round"/>
+        <path d="M30 18v22M26 22h8M26 30h8M26 38h8" stroke="#ff9a3c" stroke-width="3" stroke-linecap="round"/>
+        <path d="M44 14 L36 32 L42 32 L38 46 L52 26 L45 26 Z" fill="#ffce29" stroke="#c98f00" stroke-width="1"/>
+      </svg>
+    </div>
+    <div class="brand-title">WireSim<span>WEB</span></div>
+    <div class="brand-actions">
+      <button class="icon-btn" title="Buscar">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="icon-btn" title="Mais opções">
+        <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Editor -->
+  <section class="editor">
+
+    <div class="editor-titlebar">
+      <button class="tbtn" id="btnBack" title="Voltar">←</button>
+      <div class="doc-title">
+        <span class="doc-icon">🖥️</span>
+        <span id="docName" contenteditable="false">Automação Industrial</span>
+      </div>
+      <div class="spacer"></div>
+      <span class="timer" id="timer">00:00</span>
+      <button class="tbtn" id="btnRefresh" title="Reiniciar simulação">⟳</button>
+      <button class="tbtn" id="btnExpand" title="Tela cheia">⤢</button>
+    </div>
+
+    <div class="editor-toolbar" id="editorToolbar">
+      <button class="tbtn" id="btnMenu" title="Componentes">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="tbtn" id="btnTools" title="Ajustes / grade">
+        <svg viewBox="0 0 24 24"><path d="M14.7 6.3a2 2 0 0 0 0-2.8L12.5 1.3a2 2 0 0 0-2.8 0L2.3 8.7a2 2 0 0 0 0 2.8l2.2 2.2a2 2 0 0 0 2.8 0z" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M16 12l6 6-2 2-6-6" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+      </button>
+      <button class="tbtn" id="btnTree" title="Lista de componentes">
+        <svg viewBox="0 0 24 24"><path d="M6 3v10a4 4 0 0 0 4 4h8M6 3H4M6 9H4M6 15H4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="20" cy="17" r="2" fill="currentColor"/></svg>
+      </button>
+      <button class="tbtn" id="btnDoc" title="Nova folha">
+        <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M15 2v5h5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+      </button>
+      <button class="tbtn active-yellow" id="btnTutorial" title="Tutorial rápido">
+        <svg viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 8-4v6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M6 10.5V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>
+      </button>
+      <button class="tbtn active-blue" id="btnCollab" title="Modo colaborativo">
+        <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="17" cy="9" r="2.4" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M2 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M14 20c0-2.4 1.7-4.3 4-4.9" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+      </button>
+      <button class="tbtn" id="btnLang" title="Idioma">🌐</button>
+      <button class="tbtn" id="btnPan" title="Mover tela">✋</button>
+      <button class="tbtn" id="btnRename" title="Renomear folha">✏️</button>
+      <div class="zoom-group">
+        <button class="tbtn" id="zoomOut">−</button>
+        <span id="zoomLabel">100%</span>
+        <button class="tbtn" id="zoomIn">+</button>
+      </div>
+    </div>
+
+    <div class="editor-modebar">
+      <button class="mbtn active" id="modeSelect" data-mode="select" title="Selecionar / mover">
+        <svg viewBox="0 0 24 24"><path d="M4 3l7 18 2.5-7.5L21 11z" fill="currentColor"/></svg>
+      </button>
+      <button class="mbtn play" id="btnSimulate" title="Simular circuito">▶</button>
+      <button class="mbtn" id="modeWire" data-mode="wire" title="Ligar fios">FIO</button>
+    </div>
+
+    <div class="sheet-tabs" id="sheetTabs"></div>
+
+    <div class="workspace">
+      <aside class="palette" id="palette">
+        <div class="palette-head">
+          <h3>Componentes</h3>
+          <button class="icon-btn small" id="btnClosePalette">✕</button>
+        </div>
+        <div class="palette-list" id="paletteList"></div>
+      </aside>
+
+      <aside class="layers" id="layersPanel">
+        <div class="palette-head">
+          <h3>Nesta folha</h3>
+          <button class="icon-btn small" id="btnCloseLayers">✕</button>
+        </div>
+        <div class="layers-list" id="layersList"></div>
+      </aside>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <div class="canvas-world" id="world" style="transform: translate(0px,0px) scale(1);">
+          <svg id="wireLayer" width="4000" height="3000"></svg>
+          <div id="componentLayer"></div>
+        </div>
+        <div class="hint" id="hint"></div>
+      </div>
+
+      <div class="float-tools">
+        <button class="fbtn" id="btnMultimeter" title="Multímetro (medir fio)">🧪</button>
+        <button class="fbtn" id="btnValidate" title="Validar circuito">✓</button>
+        <button class="fbtn danger" id="btnDelete" title="Excluir selecionado">🗑</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+  <div class="tutorial-pop" id="tutorialPop"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
