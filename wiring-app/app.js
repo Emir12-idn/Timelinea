@@ -1,7 +1,10 @@
 /* ============================================================
    WireSim Web — original HTML/CSS/JS clone of an industrial
    automation wiring/circuit simulator UI. Not affiliated with
-   or copying assets from any third-party product.
+   or copying assets from any third-party product. Component
+   names reference common brands/models sold in Indonesia
+   (Chint, Schneider Electric, ABB) purely as realistic labels
+   for educational purposes.
    ============================================================ */
 
 (() => {
@@ -13,9 +16,9 @@ const svg = (w,h,inner) => `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${
 
 const COMP_DEFS = {
 
-  /* ---- Fontes (power sources) ---- */
+  /* ---- Fontes / Sources ---- */
   power: {
-    label: "Fonte 24V DC", w: 110, h: 100, isSource: true,
+    label: { id:"Catu Daya 24V DC", en:"24V DC Power Supply" }, w: 110, h: 100, isSource: true,
     terminals: [
       { id:"V1", x:14, y:100, pole:"pos" }, { id:"V2", x:34, y:100, pole:"pos" },
       { id:"N1", x:62, y:100, pole:"neg" }, { id:"N2", x:82, y:100, pole:"neg" },
@@ -31,7 +34,7 @@ const COMP_DEFS = {
     `)
   },
   acSource: {
-    label: "Fonte AC 220V", w: 100, h: 90, isSource: true,
+    label: { id:"Sumber AC 220V", en:"220V AC Source" }, w: 100, h: 90, isSource: true,
     terminals: [ { id:"L", x:20, y:90, pole:"pos" }, { id:"N", x:70, y:90, pole:"neg" } ],
     icon: (c) => svg(100,90,`
       <rect x="2" y="2" width="96" height="78" rx="8" fill="#1b2530" stroke="#f4b400" stroke-width="2"/>
@@ -41,7 +44,7 @@ const COMP_DEFS = {
     `)
   },
   threePhaseSource: {
-    label: "Fonte Trifásica 380V", w: 120, h: 90, isSource: true,
+    label: { id:"Sumber 3 Fasa 380V", en:"3-Phase 380V Source" }, w: 120, h: 90, isSource: true,
     terminals: [
       { id:"L1", x:15, y:90, pole:"pos" }, { id:"L2", x:40, y:90, pole:"pos" },
       { id:"L3", x:65, y:90, pole:"pos" }, { id:"N", x:100, y:90, pole:"neg" }
@@ -55,7 +58,8 @@ const COMP_DEFS = {
     `)
   },
   switchingSupply: {
-    label: "Fonte Chaveada", w: 130, h: 110, converter: { inHot:"L", inReturn:"N" },
+    label: { id:"Power Supply Switching (Schneider ABL8)", en:"Switching Power Supply (Schneider ABL8)" },
+    w: 130, h: 110, converter: { inHot:"L", inReturn:"N" },
     terminals: [
       { id:"L", x:15, y:0 }, { id:"N", x:35, y:0 },
       { id:"+V", x:80, y:110, pole:"pos" }, { id:"-V", x:105, y:110, pole:"neg" }
@@ -72,9 +76,9 @@ const COMP_DEFS = {
     `); }
   },
 
-  /* ---- Proteção (protection) ---- */
+  /* ---- Proteksi / Protection ---- */
   breaker: {
-    label: "Disjuntor", w: 40, h: 80, switchable: true, defaultClosed: true,
+    label: { id:"MCB (Chint NXB-63)", en:"MCB (Chint NXB-63)" }, w: 40, h: 80, switchable: true, defaultClosed: true,
     terminals: [ { id:"L", x:20, y:0 }, { id:"T", x:20, y:80 } ],
     icon: (c) => { const closed = c.state.closed; return svg(40,80,`
       <rect x="3" y="3" width="34" height="74" rx="5" fill="#f2f4f6" stroke="#555" stroke-width="1.5"/>
@@ -84,7 +88,7 @@ const COMP_DEFS = {
     `); }
   },
   fuse: {
-    label: "Fusível", w: 36, h: 70, switchable: true, defaultClosed: true,
+    label: { id:"Sekring (Chint RT18-32)", en:"Fuse (Chint RT18-32)" }, w: 36, h: 70, switchable: true, defaultClosed: true,
     terminals: [ { id:"L", x:18, y:0 }, { id:"T", x:18, y:70 } ],
     icon: (c) => { const closed = c.state.closed; return svg(36,70,`
       <rect x="8" y="4" width="20" height="62" rx="10" fill="#eef3f7" stroke="#8899a6" stroke-width="1.5"/>
@@ -94,7 +98,7 @@ const COMP_DEFS = {
     `); }
   },
   thermalOverload: {
-    label: "Relé Térmico", w: 54, h: 80, switchable: true, defaultClosed: true,
+    label: { id:"Relai Beban Lebih / TOR (Chint JR28-25)", en:"Thermal Overload Relay (Chint JR28-25)" }, w: 54, h: 80, switchable: true, defaultClosed: true,
     terminals: [ { id:"95", x:27, y:0 }, { id:"96", x:27, y:80 } ],
     icon: (c) => { const closed = c.state.closed; return svg(54,80,`
       <rect x="3" y="3" width="48" height="74" rx="5" fill="#f2f4f6" stroke="#555" stroke-width="1.5"/>
@@ -104,9 +108,9 @@ const COMP_DEFS = {
     `); }
   },
 
-  /* ---- Comando (command / sensing) ---- */
+  /* ---- Kontrol / Command & sensing ---- */
   button: {
-    label: "Botão (NA)", w: 44, h: 44, switchable: true, defaultClosed: false,
+    label: { id:"Tombol Tekan NO (Schneider XB2-BA31)", en:"Push Button NO (Schneider XB2-BA31)" }, w: 44, h: 44, switchable: true, defaultClosed: false,
     terminals: [ { id:"1", x:0, y:22 }, { id:"2", x:44, y:22 } ],
     icon: (c) => { const pressed = c.state.closed; return svg(44,44,`
       <circle cx="22" cy="22" r="19" fill="#dfe3e8" stroke="#555" stroke-width="1.5"/>
@@ -114,7 +118,7 @@ const COMP_DEFS = {
     `); }
   },
   emergencyStop: {
-    label: "Botão de Emergência", w: 50, h: 50, switchable: true, defaultClosed: true,
+    label: { id:"Tombol Darurat / E-Stop (Schneider XB4-BS8445)", en:"Emergency Stop (Schneider XB4-BS8445)" }, w: 50, h: 50, switchable: true, defaultClosed: true,
     terminals: [ { id:"1", x:0, y:25 }, { id:"2", x:50, y:25 } ],
     icon: (c) => { const pressed = !c.state.closed; return svg(50,50,`
       <circle cx="25" cy="25" r="22" fill="#2a2a2a"/>
@@ -123,7 +127,7 @@ const COMP_DEFS = {
     `); }
   },
   selector: {
-    label: "Seletora (2 pos.)", w: 54, h: 54, switchable: true, defaultClosed: true,
+    label: { id:"Saklar Selektor 2 Posisi (Schneider XB4-BD33)", en:"2-Position Selector Switch (Schneider XB4-BD33)" }, w: 54, h: 54, switchable: true, defaultClosed: true,
     terminals: [ { id:"C", x:0, y:27 }, { id:"NO", x:54, y:27 } ],
     icon: (c) => { const angle = c.state.closed ? -28 : 28; return svg(54,54,`
       <circle cx="27" cy="27" r="22" fill="#2a323d" stroke="#111" stroke-width="2"/>
@@ -132,7 +136,7 @@ const COMP_DEFS = {
     `); }
   },
   selector3: {
-    label: "Seletora Man-0-Auto", w: 60, h: 60, selector3: true, defaultPos: 1,
+    label: { id:"Saklar Selektor Manual-0-Auto (ABB)", en:"HAND-OFF-AUTO Selector Switch (ABB)" }, w: 60, h: 60, selector3: true, defaultPos: 1,
     terminals: [ { id:"C", x:0, y:30 }, { id:"NO1", x:60, y:6 }, { id:"NO2", x:60, y:54 } ],
     icon: (c) => { const pos = c.state.pos; const angle = pos===0?-35:pos===2?35:0; return svg(60,60,`
       <circle cx="30" cy="30" r="24" fill="#2a323d" stroke="#111" stroke-width="2"/>
@@ -142,7 +146,7 @@ const COMP_DEFS = {
     `); }
   },
   limitSwitch: {
-    label: "Fim de Curso (NA)", w: 46, h: 46, switchable: true, defaultClosed: false,
+    label: { id:"Limit Switch (Schneider XCKJ)", en:"Limit Switch (Schneider XCKJ)" }, w: 46, h: 46, switchable: true, defaultClosed: false,
     terminals: [ { id:"1", x:0, y:23 }, { id:"2", x:46, y:23 } ],
     icon: (c) => { const closed = c.state.closed; return svg(46,46,`
       <rect x="3" y="18" width="40" height="20" rx="4" fill="#e9ecef" stroke="#555" stroke-width="1.5"/>
@@ -152,7 +156,7 @@ const COMP_DEFS = {
     `); }
   },
   proximitySensor: {
-    label: "Sensor Indutivo (NA)", w: 50, h: 40, switchable: true, defaultClosed: false,
+    label: { id:"Sensor Proximity Induktif (ABB)", en:"Inductive Proximity Sensor (ABB)" }, w: 50, h: 40, switchable: true, defaultClosed: false,
     terminals: [ { id:"1", x:0, y:20 }, { id:"2", x:50, y:20 } ],
     icon: (c) => { const on = c.state.closed; return svg(50,40,`
       <rect x="4" y="10" width="42" height="20" rx="10" fill="#2a323d" stroke="#111" stroke-width="1.5"/>
@@ -161,9 +165,9 @@ const COMP_DEFS = {
     `); }
   },
 
-  /* ---- Atuação (actuation) ---- */
+  /* ---- Aktuasi / Actuation ---- */
   contactor: {
-    label: "Contator", w: 100, h: 100, coil: true,
+    label: { id:"Kontaktor Magnet (Chint NXC-09)", en:"Magnetic Contactor (Chint NXC-09)" }, w: 100, h: 100, coil: true,
     contacts: [ { a:"13", b:"14", type:"NO" }, { a:"21", b:"22", type:"NC" } ],
     terminals: [
       { id:"A1", x:15, y:0 }, { id:"A2", x:15, y:100 },
@@ -185,7 +189,7 @@ const COMP_DEFS = {
     `); }
   },
   relay: {
-    label: "Relé de Controle", w: 70, h: 90, coil: true,
+    label: { id:"Relai Kontrol (Schneider RXM)", en:"Control Relay (Schneider RXM)" }, w: 70, h: 90, coil: true,
     contacts: [ { a:"C", b:"NO", type:"NO" }, { a:"C", b:"NC", type:"NC" } ],
     terminals: [
       { id:"A1", x:8, y:0 }, { id:"A2", x:8, y:90 },
@@ -202,7 +206,7 @@ const COMP_DEFS = {
     `); }
   },
   timerRelay: {
-    label: "Relé de Tempo (ON)", w: 90, h: 90, coil: true, timer: true, defaultDelayMs: 3000,
+    label: { id:"Relai Waktu / Timer ON-Delay (Schneider RE17)", en:"Time Delay Relay ON-Delay (Schneider RE17)" }, w: 90, h: 90, coil: true, timer: true, defaultDelayMs: 3000,
     contacts: [ { a:"15", b:"16", type:"NO", useDelay:true } ],
     terminals: [ { id:"A1", x:10, y:0 }, { id:"A2", x:10, y:90 }, { id:"15", x:80, y:0 }, { id:"16", x:80, y:90 } ],
     icon: (c) => {
@@ -225,20 +229,20 @@ const COMP_DEFS = {
     }
   },
 
-  /* ---- Cargas (loads / displays) ---- */
+  /* ---- Beban / Loads & displays ---- */
   plc: {
-    label: "CLP", w: 170, h: 100, isLoad: true,
+    label: { id:"PLC (Schneider Modicon M221)", en:"PLC (Schneider Modicon M221)" }, w: 170, h: 100, isLoad: true,
     terminals: [ { id:"L", x:20, y:100 }, { id:"N", x:40, y:100 } ],
     icon: (c) => { const on = c.state.on; return svg(170,100,`
       <rect x="2" y="2" width="166" height="96" rx="6" fill="#2a323d" stroke="#111" stroke-width="2"/>
       <rect x="14" y="12" width="60" height="34" rx="3" fill="${on?'#0d84ff':'#10151c'}"/>
       <text x="44" y="33" text-anchor="middle" font-size="9" fill="${on?'#fff':'#3a4552'}">RUN</text>
       ${Array.from({length:8}).map((_,i)=>`<rect x="${10+i*19}" y="86" width="10" height="8" fill="#8b96a3"/>`).join("")}
-      <text x="120" y="30" fill="#9aa6b2" font-size="10">CLP</text>
+      <text x="120" y="30" fill="#9aa6b2" font-size="10">PLC</text>
     `); }
   },
   hmi: {
-    label: "IHM", w: 150, h: 100, isLoad: true,
+    label: { id:"Panel HMI (Schneider Magelis)", en:"HMI Panel (Schneider Magelis)" }, w: 150, h: 100, isLoad: true,
     terminals: [ { id:"L", x:20, y:100 }, { id:"N", x:40, y:100 } ],
     icon: (c) => { const on = c.state.on; return svg(150,100,`
       <rect x="2" y="2" width="146" height="96" rx="8" fill="#12161c" stroke="#333" stroke-width="2"/>
@@ -247,7 +251,7 @@ const COMP_DEFS = {
     `); }
   },
   motor: {
-    label: "Motor", w: 80, h: 80, isLoad: true,
+    label: { id:"Motor Listrik (ABB M2BAX)", en:"Electric Motor (ABB M2BAX)" }, w: 80, h: 80, isLoad: true,
     terminals: [ { id:"U", x:0, y:40 }, { id:"V", x:80, y:40 } ],
     icon: (c) => svg(80,80,`
       <circle cx="40" cy="40" r="36" fill="#2fbf6a" stroke="#1c7d45" stroke-width="3"/>
@@ -257,7 +261,7 @@ const COMP_DEFS = {
     `)
   },
   threePhaseMotor: {
-    label: "Motor Trifásico", w: 90, h: 90, isLoad: true,
+    label: { id:"Motor Induksi 3 Fasa (ABB M2BAX)", en:"3-Phase Induction Motor (ABB M2BAX)" }, w: 90, h: 90, isLoad: true,
     terminals: [ { id:"U", x:15, y:90 }, { id:"V", x:45, y:90 }, { id:"W", x:75, y:90 } ],
     icon: (c) => svg(90,90,`
       <circle cx="45" cy="45" r="40" fill="#2fbf6a" stroke="#1c7d45" stroke-width="3"/>
@@ -267,13 +271,13 @@ const COMP_DEFS = {
     `)
   },
   lamp: {
-    label: "Sinaleiro", w: 30, h: 30, isLoad: true,
+    label: { id:"Lampu Indikator", en:"Pilot Lamp" }, w: 30, h: 30, isLoad: true,
     terminals: [ { id:"1", x:0, y:15 }, { id:"2", x:30, y:15 } ],
     icon: (c) => { const on = c.state.on; const color = c.state.color || "#ffce29";
       return svg(30,30,`<g class="glow"><circle cx="15" cy="15" r="12" fill="${on?color:'#5b5f66'}" stroke="#333" stroke-width="1.5"/></g>`); }
   },
   terminalBlock: {
-    label: "Bornes", w: 170, h: 26, bus: true,
+    label: { id:"Terminal Blok / Bornes", en:"Terminal Block" }, w: 170, h: 26, bus: true,
     terminals: Array.from({length:6}).map((_,i)=>({ id:"T"+(i+1), x: 14 + i*30, y: 0 })),
     icon: (c) => svg(170,26,`
       <rect x="1" y="1" width="168" height="24" rx="3" fill="#d8cdb0" stroke="#8a7f5e" stroke-width="1.5"/>
@@ -282,51 +286,120 @@ const COMP_DEFS = {
   }
 };
 
+const COLOR_NAMES = {
+  "#2fbf6a": { id:"Hijau", en:"Green" },
+  "#e5484d": { id:"Merah", en:"Red" },
+  "#ffce29": { id:"Kuning", en:"Yellow" }
+};
+
 const PALETTE_ITEMS = [
-  { cat:"Fontes", type:"power" },
-  { cat:"Fontes", type:"acSource" },
-  { cat:"Fontes", type:"threePhaseSource" },
-  { cat:"Fontes", type:"switchingSupply" },
-  { cat:"Proteção", type:"breaker" },
-  { cat:"Proteção", type:"fuse" },
-  { cat:"Proteção", type:"thermalOverload" },
-  { cat:"Comando", type:"button" },
-  { cat:"Comando", type:"emergencyStop" },
-  { cat:"Comando", type:"selector" },
-  { cat:"Comando", type:"selector3" },
-  { cat:"Comando", type:"limitSwitch" },
-  { cat:"Comando", type:"proximitySensor" },
-  { cat:"Atuação", type:"contactor" },
-  { cat:"Atuação", type:"relay" },
-  { cat:"Atuação", type:"timerRelay" },
-  { cat:"Cargas", type:"motor" },
-  { cat:"Cargas", type:"threePhaseMotor" },
-  { cat:"Cargas", type:"lamp", label:"Sinaleiro verde", extra:{ color:"#2fbf6a" } },
-  { cat:"Cargas", type:"lamp", label:"Sinaleiro vermelho", extra:{ color:"#e5484d" } },
-  { cat:"Cargas", type:"lamp", label:"Sinaleiro amarelo", extra:{ color:"#ffce29" } },
-  { cat:"Cargas", type:"hmi" },
-  { cat:"Cargas", type:"plc" },
-  { cat:"Outros", type:"terminalBlock" }
+  { cat_id:"Fontes", cat_en:"Sources", type:"power" },
+  { cat_id:"Fontes", cat_en:"Sources", type:"acSource" },
+  { cat_id:"Fontes", cat_en:"Sources", type:"threePhaseSource" },
+  { cat_id:"Fontes", cat_en:"Sources", type:"switchingSupply" },
+  { cat_id:"Proteksi", cat_en:"Protection", type:"breaker" },
+  { cat_id:"Proteksi", cat_en:"Protection", type:"fuse" },
+  { cat_id:"Proteksi", cat_en:"Protection", type:"thermalOverload" },
+  { cat_id:"Kontrol", cat_en:"Command", type:"button" },
+  { cat_id:"Kontrol", cat_en:"Command", type:"emergencyStop" },
+  { cat_id:"Kontrol", cat_en:"Command", type:"selector" },
+  { cat_id:"Kontrol", cat_en:"Command", type:"selector3" },
+  { cat_id:"Kontrol", cat_en:"Command", type:"limitSwitch" },
+  { cat_id:"Kontrol", cat_en:"Command", type:"proximitySensor" },
+  { cat_id:"Aktuasi", cat_en:"Actuation", type:"contactor" },
+  { cat_id:"Aktuasi", cat_en:"Actuation", type:"relay" },
+  { cat_id:"Aktuasi", cat_en:"Actuation", type:"timerRelay" },
+  { cat_id:"Beban", cat_en:"Loads", type:"motor" },
+  { cat_id:"Beban", cat_en:"Loads", type:"threePhaseMotor" },
+  { cat_id:"Beban", cat_en:"Loads", type:"lamp", extra:{ color:"#2fbf6a" } },
+  { cat_id:"Beban", cat_en:"Loads", type:"lamp", extra:{ color:"#e5484d" } },
+  { cat_id:"Beban", cat_en:"Loads", type:"lamp", extra:{ color:"#ffce29" } },
+  { cat_id:"Beban", cat_en:"Loads", type:"hmi" },
+  { cat_id:"Beban", cat_en:"Loads", type:"plc" },
+  { cat_id:"Lainnya", cat_en:"Other", type:"terminalBlock" }
 ];
 
 /* ---------------- i18n ---------------- */
-const LANGS = ["pt","en","id"];
+const LANGS = ["id","en"];
 const I18N = {
-  pt: { comps:"Componentes", sheet:"Nesta folha", wire:"FIO", validateOk:"Circuito OK — todos os terminais principais conectados.",
-        validateBad:(n)=>`${n} terminal(is) sem conexão.`, sim_on:"Simulação iniciada", sim_off:"Simulação parada",
-        deleted:"Item excluído", noSelection:"Selecione um componente ou fio para excluir",
-        collab:"Modo colaborativo (demonstração)", measure:(v)=>`Medição: ${v}` },
-  en: { comps:"Components", sheet:"On this sheet", wire:"WIRE", validateOk:"Circuit OK — all main terminals connected.",
-        validateBad:(n)=>`${n} unconnected terminal(s).`, sim_on:"Simulation started", sim_off:"Simulation stopped",
-        deleted:"Item deleted", noSelection:"Select a component or wire to delete",
-        collab:"Collaborative mode (demo)", measure:(v)=>`Reading: ${v}` },
-  id: { comps:"Komponen", sheet:"Di lembar ini", wire:"KABEL", validateOk:"Sirkuit OK — semua terminal utama tersambung.",
-        validateBad:(n)=>`${n} terminal belum tersambung.`, sim_on:"Simulasi dimulai", sim_off:"Simulasi dihentikan",
-        deleted:"Item dihapus", noSelection:"Pilih komponen atau kabel untuk dihapus",
-        collab:"Mode kolaborasi (demo)", measure:(v)=>`Hasil ukur: ${v}` }
+  id: {
+    comps:"Komponen", sheet:"Di lembar ini", wire:"KABEL",
+    validateOk:"Rangkaian OK — semua terminal utama tersambung.",
+    validateBad:(n)=>`${n} terminal belum tersambung.`,
+    sim_on:"Simulasi dimulai", sim_off:"Simulasi dihentikan",
+    deleted:"Item dihapus", noSelection:"Pilih komponen atau kabel untuk dihapus",
+    collab:"Mode kolaborasi (demo)", measure:(v)=>`Hasil ukur: ${v}`,
+    gridOn:"Grid diaktifkan", gridOff:"Grid dinonaktifkan",
+    newSheetToast:"Lembar baru dibuat", sheetNamePrompt:"Nama lembar:", simReset:"Simulasi diulang",
+    multimeterOnMsg:"Multimeter aktif — klik kabel atau terminal", multimeterOffMsg:"Multimeter nonaktif",
+    coilOn:"kumparan aktif", coilOff:"kumparan mati",
+    converterOn:"teraliri listrik", converterOff:"tidak ada suplai",
+    loadOn:"menyala", loadOff:"mati",
+    measurePos:"fasa / positif aktif", measureNeg:"netral / balik", measureNone:"tidak ada tegangan",
+    appTitle:"WireSim Web — Simulator Otomasi Industri", docTitleDefault:"Panel Otomasi Industri", sheetPrefix:"Lembar",
+    tt_back:"Kembali", tt_refresh:"Ulangi simulasi", tt_expand:"Layar penuh", tt_menu:"Komponen",
+    tt_tools:"Pengaturan grid", tt_tree:"Daftar komponen", tt_doc:"Lembar baru", tt_tutorial:"Tutorial singkat",
+    tt_collab:"Mode kolaborasi", tt_lang:"Bahasa", tt_pan:"Geser tampilan", tt_rename:"Ganti nama lembar",
+    tt_zoomOut:"Perkecil", tt_zoomIn:"Perbesar", tt_multimeter:"Multimeter (ukur kabel)",
+    tt_validate:"Validasi rangkaian", tt_delete:"Hapus yang dipilih", tt_select:"Pilih / pindahkan", tt_simulate:"Jalankan simulasi",
+    tt_deleteRow:"Hapus", tutClose:"Tutup", tutNext:"Berikutnya", tutFinish:"Selesai",
+    tutorialSteps: [
+      { title:"Selamat datang!", body:"Ini adalah simulator otomasi industri dengan pustaka komponen lengkap — sumber AC/DC, proteksi, kontrol, kontaktor/relai, motor, dan lampu indikator — memakai merk yang umum dipakai di Indonesia (Chint, Schneider, ABB). Buka menu ☰ untuk melihat semua komponen." },
+      { title:"Menambahkan komponen", body:"Seret komponen dari daftar ke lembar kerja untuk menempatkannya. Komponen dikelompokkan per kategori: Fontes, Proteksi, Kontrol, Aktuasi, dan Beban." },
+      { title:"Menyambung kabel", body:"Aktifkan alat KABEL, klik satu terminal lalu klik terminal lainnya untuk membuat sambungan." },
+      { title:"Simulasi", body:"Klik ▶ untuk memulai simulasi. Klik tombol/MCB/sensor untuk mengoperasikannya, dan lihat kontaktor, relai waktu, dan lampu indikator merespons secara real-time." },
+      { title:"Zoom dan lembar kerja", body:"Gunakan +/− untuk zoom, ✋ untuk menggeser tampilan, dan tab lembar untuk bekerja di beberapa lembar sekaligus." }
+    ]
+  },
+  en: {
+    comps:"Components", sheet:"On this sheet", wire:"WIRE",
+    validateOk:"Circuit OK — all main terminals connected.",
+    validateBad:(n)=>`${n} unconnected terminal(s).`,
+    sim_on:"Simulation started", sim_off:"Simulation stopped",
+    deleted:"Item deleted", noSelection:"Select a component or wire to delete",
+    collab:"Collaborative mode (demo)", measure:(v)=>`Reading: ${v}`,
+    gridOn:"Grid enabled", gridOff:"Grid disabled",
+    newSheetToast:"New sheet created", sheetNamePrompt:"Sheet name:", simReset:"Simulation reset",
+    multimeterOnMsg:"Multimeter active — click a wire or terminal", multimeterOffMsg:"Multimeter off",
+    coilOn:"coil energized", coilOff:"coil de-energized",
+    converterOn:"powered", converterOff:"no supply",
+    loadOn:"on", loadOff:"off",
+    measurePos:"live / positive", measureNeg:"neutral / return", measureNone:"no voltage",
+    appTitle:"WireSim Web — Industrial Automation Simulator", docTitleDefault:"Industrial Automation Panel", sheetPrefix:"Sheet",
+    tt_back:"Back", tt_refresh:"Restart simulation", tt_expand:"Fullscreen", tt_menu:"Components",
+    tt_tools:"Grid settings", tt_tree:"Component list", tt_doc:"New sheet", tt_tutorial:"Quick tutorial",
+    tt_collab:"Collaboration mode", tt_lang:"Language", tt_pan:"Pan view", tt_rename:"Rename sheet",
+    tt_zoomOut:"Zoom out", tt_zoomIn:"Zoom in", tt_multimeter:"Multimeter (probe wire)",
+    tt_validate:"Validate circuit", tt_delete:"Delete selected", tt_select:"Select / move", tt_simulate:"Run simulation",
+    tt_deleteRow:"Delete", tutClose:"Close", tutNext:"Next", tutFinish:"Finish",
+    tutorialSteps: [
+      { title:"Welcome!", body:"This is an industrial automation simulator with a full component library — AC/DC sources, protection, command devices, contactors/relays, motors, and pilot lamps — featuring brands common in Indonesia (Chint, Schneider, ABB). Open the ☰ menu to see all components." },
+      { title:"Adding components", body:"Drag a component from the list onto the sheet to place it. Components are grouped by category: Sources, Protection, Command, Actuation, and Loads." },
+      { title:"Wiring terminals", body:"Turn on the WIRE tool, click one terminal, then click another to create a connection." },
+      { title:"Simulating", body:"Click ▶ to start the simulation. Click buttons/breakers/sensors to operate them, and watch contactors, timer relays, and pilot lamps react in real time." },
+      { title:"Zoom and sheets", body:"Use +/− to zoom, ✋ to pan the view, and the sheet tabs to work across multiple sheets." }
+    ]
+  }
 };
 let langIdx = 0;
 const t = (k, ...a) => { const v = I18N[LANGS[langIdx]][k]; return typeof v === "function" ? v(...a) : v; };
+const lang = () => LANGS[langIdx];
+const compLabel = (comp) => {
+  const def = COMP_DEFS[comp.type];
+  let base = def.label[lang()] || def.label.id;
+  if (comp.type === "lamp" && comp.state.color && COLOR_NAMES[comp.state.color]) {
+    base += ` (${COLOR_NAMES[comp.state.color][lang()]})`;
+  }
+  return base;
+};
+const paletteLabel = (item) => {
+  const def = COMP_DEFS[item.type];
+  let base = def.label[lang()] || def.label.id;
+  if (item.type === "lamp" && item.extra && item.extra.color && COLOR_NAMES[item.extra.color]) {
+    base += ` (${COLOR_NAMES[item.extra.color][lang()]})`;
+  }
+  return base;
+};
 
 /* ---------------- State ---------------- */
 let sheets = [];
@@ -385,10 +458,10 @@ function makeInitialState(type, def, extra) {
 }
 
 function demoSheet() {
-  const s = { id: uid("sheet"), name: "1. Folha 1", components: [], wires: [] };
+  const s = { id: uid("sheet"), name: "Lembar 1", components: [], wires: [] };
   const add = (type, x, y, extra) => {
     const def = COMP_DEFS[type];
-    const comp = { id: uid("c"), type, x, y, state: makeInitialState(type, def, extra), label: def.label };
+    const comp = { id: uid("c"), type, x, y, state: makeInitialState(type, def, extra) };
     s.components.push(comp);
     return comp;
   };
@@ -433,18 +506,19 @@ function renderPalette() {
   paletteList.innerHTML = "";
   let lastCat = null;
   PALETTE_ITEMS.forEach(item => {
-    if (item.cat !== lastCat) {
-      lastCat = item.cat;
+    const catName = lang() === "id" ? item.cat_id : item.cat_en;
+    if (catName !== lastCat) {
+      lastCat = catName;
       const h = document.createElement("div");
       h.className = "palette-section";
-      h.textContent = item.cat;
+      h.textContent = catName;
       paletteList.appendChild(h);
     }
     const def = COMP_DEFS[item.type];
     const previewComp = { state: makeInitialState(item.type, def, item.extra) };
     const el = document.createElement("div");
     el.className = "palette-item";
-    el.innerHTML = def.icon(previewComp) + `<span>${item.label || def.label}</span>`;
+    el.innerHTML = def.icon(previewComp) + `<span>${paletteLabel(item)}</span>`;
     el.addEventListener("pointerdown", (e) => startPaletteDrag(e, item));
     paletteList.appendChild(el);
   });
@@ -464,10 +538,10 @@ function renderSheetTabs() {
     sheetTabsEl.appendChild(tab);
   });
   const addBtn = document.createElement("button");
-  addBtn.className = "sheet-add"; addBtn.textContent = "+"; addBtn.title = "Nova folha";
+  addBtn.className = "sheet-add"; addBtn.textContent = "+"; addBtn.title = t("tt_doc");
   addBtn.addEventListener("click", () => {
     const n = sheets.length + 1;
-    const s = { id: uid("sheet"), name: `Folha ${n}`, components: [], wires: [] };
+    const s = { id: uid("sheet"), name: `${t("sheetPrefix")} ${n}`, components: [], wires: [] };
     sheets.push(s); currentSheetId = s.id; deselectAll(); renderAll(); renderSheetTabs(); save();
   });
   sheetTabsEl.appendChild(addBtn);
@@ -498,7 +572,7 @@ function renderComponents() {
     el.style.left = comp.x + "px"; el.style.top = comp.y + "px";
     el.style.width = def.w + "px"; el.style.height = def.h + "px";
     el.dataset.id = comp.id;
-    el.innerHTML = `<div class="comp-body glow">${def.icon(comp)}</div><div class="comp-label">${comp.label || def.label}</div>`;
+    el.innerHTML = `<div class="comp-body glow">${def.icon(comp)}</div><div class="comp-label">${compLabel(comp)}</div>`;
     def.terminals.forEach(term => {
       const td = document.createElement("div");
       td.className = "term";
@@ -561,10 +635,9 @@ function renderLayers() {
   const sheet = getSheet();
   if (!sheet) return;
   sheet.components.forEach(comp => {
-    const def = COMP_DEFS[comp.type];
     const row = document.createElement("div");
     row.className = "layer-row" + (comp.id === selectedCompId ? " selected" : "");
-    row.innerHTML = `<span class="dot"></span><span>${comp.label || def.label}</span><button class="del" title="Excluir">🗑</button>`;
+    row.innerHTML = `<span class="dot"></span><span>${compLabel(comp)}</span><button class="del" title="${t("tt_deleteRow")}">🗑</button>`;
     row.addEventListener("click", (e) => {
       if (e.target.closest(".del")) { deleteComponent(comp.id); return; }
       selectedCompId = comp.id; selectedWireId = null; renderAll();
@@ -699,10 +772,10 @@ function setSimulating(on) {
 }
 
 /* ---------------- Component add / move / delete ---------------- */
-function addComponent(type, x, y, extra, labelOverride) {
+function addComponent(type, x, y, extra) {
   const def = COMP_DEFS[type];
   const state = makeInitialState(type, def, extra);
-  const comp = { id: uid("c"), type, x: Math.round(x - def.w/2), y: Math.round(y - def.h/2), state, label: labelOverride || def.label };
+  const comp = { id: uid("c"), type, x: Math.round(x - def.w/2), y: Math.round(y - def.h/2), state };
   getSheet().components.push(comp);
   selectedCompId = comp.id; selectedWireId = null;
   runSimulation(); renderAll(); save();
@@ -735,9 +808,9 @@ function handleCompPointerDown(e, comp) {
     const def = COMP_DEFS[comp.type];
     if (def.switchable) { comp.state.closed = !comp.state.closed; runSimulation(); renderAll(); save(); }
     else if (def.selector3) { comp.state.pos = (comp.state.pos + 1) % 3; runSimulation(); renderAll(); save(); }
-    else if (def.coil) toast(`${comp.label || def.label}: bobina ${comp.state.energized ? "energizada" : "desenergizada"}`);
-    else if (def.converter) toast(`${comp.label || def.label}: ${comp.state.on ? "alimentado" : "sem alimentação"}`);
-    else if (def.isLoad) toast(`${comp.label || def.label}: ${comp.state.on ? "ligado" : "desligado"}`);
+    else if (def.coil) toast(`${compLabel(comp)}: ${comp.state.energized ? t("coilOn") : t("coilOff")}`);
+    else if (def.converter) toast(`${compLabel(comp)}: ${comp.state.on ? t("converterOn") : t("converterOff")}`);
+    else if (def.isLoad) toast(`${compLabel(comp)}: ${comp.state.on ? t("loadOn") : t("loadOff")}`);
     return;
   }
   e.stopPropagation();
@@ -837,7 +910,7 @@ function startPaletteDrag(e, item) {
   ghost.style.opacity = "0.85";
   ghost.innerHTML = def.icon(previewComp);
   document.body.appendChild(ghost);
-  showHint(item.label || def.label);
+  showHint(paletteLabel(item));
   function move(ev) {
     ghost.style.left = ev.clientX - def.w/2 + "px";
     ghost.style.top = ev.clientY - def.h/2 + "px";
@@ -849,7 +922,7 @@ function startPaletteDrag(e, item) {
     const rect = canvasWrap.getBoundingClientRect();
     if (ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
       const wp = worldPoint(ev.clientX, ev.clientY);
-      addComponent(item.type, wp.x, wp.y, item.extra, item.label);
+      addComponent(item.type, wp.x, wp.y, item.extra);
     }
   }
   window.addEventListener("pointermove", move);
@@ -881,23 +954,29 @@ $("btnCloseLayers").addEventListener("click", () => layersPanel.classList.remove
 $("btnTools").addEventListener("click", () => {
   const grid = canvasWrap.style.backgroundImage === "none" ? "" : "none";
   canvasWrap.style.backgroundImage = grid;
-  toast(grid === "none" ? "Grade desativada" : "Grade ativada");
+  toast(grid === "none" ? t("gridOff") : t("gridOn"));
 });
 $("btnDoc").addEventListener("click", () => {
   const n = sheets.length + 1;
-  const s = { id: uid("sheet"), name: `Folha ${n}`, components: [], wires: [] };
+  const s = { id: uid("sheet"), name: `${t("sheetPrefix")} ${n}`, components: [], wires: [] };
   sheets.push(s); currentSheetId = s.id; deselectAll(); renderAll(); renderSheetTabs(); save();
-  toast("Nova folha criada");
+  toast(t("newSheetToast"));
 });
 $("btnTutorial").addEventListener("click", showTutorial);
 $("btnCollab").addEventListener("click", () => toast(t("collab")));
-$("btnLang").addEventListener("click", () => { langIdx = (langIdx + 1) % LANGS.length; renderPalette(); toast("Language: " + LANGS[langIdx].toUpperCase()); });
+$("btnLang").addEventListener("click", () => {
+  langIdx = (langIdx + 1) % LANGS.length;
+  applyStaticI18n();
+  renderPalette();
+  renderAll();
+  toast(lang() === "id" ? "Bahasa: Indonesia" : "Language: English");
+});
 $("btnRename").addEventListener("click", () => {
   const sheet = getSheet();
-  const name = prompt("Nome da folha:", sheet.name);
+  const name = prompt(t("sheetNamePrompt"), sheet.name);
   if (name) { sheet.name = name; renderSheetTabs(); save(); }
 });
-$("btnRefresh").addEventListener("click", () => { setSimulating(false); toast("Simulação reiniciada"); });
+$("btnRefresh").addEventListener("click", () => { setSimulating(false); toast(t("simReset")); });
 $("btnExpand").addEventListener("click", () => {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>{});
   else document.exitFullscreen?.();
@@ -915,7 +994,7 @@ canvasWrap.addEventListener("wheel", (e) => {
 $("btnMultimeter").addEventListener("click", () => {
   multimeterOn = !multimeterOn;
   $("btnMultimeter").classList.toggle("active", multimeterOn);
-  toast(multimeterOn ? "Multímetro ativo — clique em um fio ou terminal" : "Multímetro desativado");
+  toast(multimeterOn ? t("multimeterOnMsg") : t("multimeterOffMsg"));
 });
 $("btnValidate").addEventListener("click", validateCircuit);
 $("btnDelete").addEventListener("click", deleteSelected);
@@ -943,19 +1022,19 @@ function validateCircuit() {
   toast(unconnected === 0 ? t("validateOk") : t("validateBad", unconnected));
 }
 function showMeasurement(comp, term) {
+  const label0 = compLabel(comp);
   const def = COMP_DEFS[comp.type];
-  const label0 = comp.label || def.label;
   let label, value;
   if (term) {
     const k = key(comp.id, term.id);
     const st = simulating ? terminalKeyState(k) : null;
     label = `${label0} · ${term.id}`;
-    value = st === "pos" ? "fase / positivo ativo" : st === "neg" ? "neutro / retorno" : "sem tensão";
+    value = st === "pos" ? t("measurePos") : st === "neg" ? t("measureNeg") : t("measureNone");
   } else {
     label = label0;
-    value = def.isLoad ? (comp.state.on ? "energizado" : "sem tensão")
-      : def.coil ? (comp.state.energized ? "bobina energizada" : "bobina desligada")
-      : def.converter ? (comp.state.on ? "saída energizada" : "sem alimentação")
+    value = def.isLoad ? (comp.state.on ? t("converterOn") : t("measureNone"))
+      : def.coil ? (comp.state.energized ? t("coilOn") : t("coilOff"))
+      : def.converter ? (comp.state.on ? t("converterOn") : t("converterOff"))
       : "—";
   }
   toast(`${t("measure", value)} — ${label}`);
@@ -970,30 +1049,49 @@ function toast(msg) {
 function showHint(msg) { hintEl.textContent = msg; hintEl.classList.add("show"); }
 function hideHint() { hintEl.classList.remove("show"); }
 
-const TUTORIAL_STEPS = [
-  { title: "Bem-vindo!", body: "Este é um simulador de automação industrial com uma biblioteca completa: fontes AC/DC, proteção, comando, contatores/relés, motores e sinaleiros. Abra o menu ☰ para ver todos os componentes." },
-  { title: "Adicionar componentes", body: "Arraste um componente da lista até a folha para posicioná-lo. Eles estão organizados por categoria: Fontes, Proteção, Comando, Atuação e Cargas." },
-  { title: "Ligar os fios", body: "Ative a ferramenta FIO, clique em um terminal e depois em outro para criar uma ligação." },
-  { title: "Simular", body: "Clique em ▶ para iniciar a simulação. Clique em botões/disjuntores/sensores para acioná-los, e veja contatores, relés de tempo e sinaleiros reagirem em tempo real." },
-  { title: "Zoom e telas", body: "Use +/− para zoom, ✋ para mover a tela, e as abas para trabalhar em várias folhas." }
-];
 let tutIdx = 0;
 function showTutorial() {
   tutIdx = 0; renderTutorialStep();
   tutorialPop.classList.add("show");
 }
 function renderTutorialStep() {
-  const step = TUTORIAL_STEPS[tutIdx];
+  const steps = t("tutorialSteps");
+  const step = steps[tutIdx];
   tutorialPop.innerHTML = `<h4>${step.title}</h4><p>${step.body}</p>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
-      <button id="tutClose" style="background:#ccc;color:#111;">Fechar</button>
-      <button id="tutNext">${tutIdx < TUTORIAL_STEPS.length-1 ? "Próximo" : "Concluir"}</button>
+      <button id="tutClose" style="background:#ccc;color:#111;">${t("tutClose")}</button>
+      <button id="tutNext">${tutIdx < steps.length-1 ? t("tutNext") : t("tutFinish")}</button>
     </div>`;
   tutorialPop.querySelector("#tutClose").addEventListener("click", () => tutorialPop.classList.remove("show"));
   tutorialPop.querySelector("#tutNext").addEventListener("click", () => {
-    if (tutIdx < TUTORIAL_STEPS.length - 1) { tutIdx++; renderTutorialStep(); }
+    if (tutIdx < steps.length - 1) { tutIdx++; renderTutorialStep(); }
     else tutorialPop.classList.remove("show");
   });
+}
+
+/* ---------------- Static text / tooltip translation ---------------- */
+function applyStaticI18n() {
+  document.title = t("appTitle");
+  $("docName").textContent = t("docTitleDefault");
+  $("btnBack").title = t("tt_back");
+  $("btnRefresh").title = t("tt_refresh");
+  $("btnExpand").title = t("tt_expand");
+  $("btnMenu").title = t("tt_menu");
+  $("btnTools").title = t("tt_tools");
+  $("btnTree").title = t("tt_tree");
+  $("btnDoc").title = t("tt_doc");
+  $("btnTutorial").title = t("tt_tutorial");
+  $("btnCollab").title = t("tt_collab");
+  $("btnLang").title = t("tt_lang");
+  $("btnPan").title = t("tt_pan");
+  $("btnRename").title = t("tt_rename");
+  $("zoomOut").title = t("tt_zoomOut");
+  $("zoomIn").title = t("tt_zoomIn");
+  $("btnMultimeter").title = t("tt_multimeter");
+  $("btnValidate").title = t("tt_validate");
+  $("btnDelete").title = t("tt_delete");
+  $("modeSelect").title = t("tt_select");
+  $("btnSimulate").title = t("tt_simulate");
 }
 
 /* ---------------- Init ---------------- */
@@ -1002,6 +1100,7 @@ function init() {
     const s = demoSheet();
     sheets = [s]; currentSheetId = s.id;
   }
+  applyStaticI18n();
   renderPalette();
   renderSheetTabs();
   updateTransform();
