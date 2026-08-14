@@ -109,6 +109,8 @@ html,body{height:100%;margin:0;background:#000;color:var(--text-light);}
 .palette-item:hover{border-color:var(--accent);}
 .palette-item svg{width:34px;height:34px;flex:0 0 auto;}
 .palette-item span{font-size:12px;line-height:1.25;}
+.palette-section{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#7b8794;padding:10px 4px 2px;font-weight:700;}
+.palette-section:first-child{padding-top:2px;}
 .layers-list{padding:8px;display:flex;flex-direction:column;gap:4px;}
 .layer-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:#2a323d;font-size:12px;cursor:pointer;}
 .layer-row.selected{outline:1px solid var(--accent);}
