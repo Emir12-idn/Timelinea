@@ -1,0 +1,63 @@
+# Self-host stack for a home PC: Postgres + the NestJS API + Caddy as a reverse
+# proxy that gets a free HTTPS certificate for your domain automatically.
+#
+# Quick start:
+#   1. cp .env.docker.example .env   (edit DOMAIN, passwords, JWT_SECRET)
+#   2. docker compose up -d --build
+#   3. docker compose exec backend npx prisma db seed   (first run only)
+#
+# See DEPLOY.md for the full walkthrough (port forwarding, DNS, etc).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-emerald}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-emerald}
+      POSTGRES_DB: ${DB_NAME:-emerald}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-emerald}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-emerald}:${DB_PASSWORD:-emerald}@db:5432/${DB_NAME:-emerald}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      NODE_ENV: production
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://${DOMAIN}}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@emeralddutasejahtera.co.id}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:

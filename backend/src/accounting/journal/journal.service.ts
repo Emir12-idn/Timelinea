@@ -1,0 +1,280 @@
+import { BadRequestException, Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "../../prisma/prisma.service";
+import { NumberingService } from "../../common/numbering.service";
+import { COA_CODE } from "./coa-codes";
+
+export interface JournalLineInput {
+  accountCode: string;
+  debit?: bigint;
+  credit?: bigint;
+}
+
+export interface PostEntryParams {
+  date: Date;
+  refType: string;
+  refId: number;
+  refNo?: string;
+  type: string;
+  companyId?: number | null;
+  createdBy?: number | null;
+  lines: JournalLineInput[];
+}
+
+/**
+ * "No man touch" posting engine — docs/DATA_DESIGN.md §4. Every transaction that
+ * gets posted calls postEntry() with the debit/credit lines for its rule; the
+ * engine itself only validates sum(debit) == sum(credit) and writes the entry.
+ * Adding a new transaction type never touches this file — see the postXxx()
+ * helpers below for the current rule set, add a new helper for a new rule.
+ */
+@Injectable()
+export class JournalService {
+  constructor(
+    private prisma: PrismaService,
+    private numbering: NumberingService,
+  ) {}
+
+  /** Runs inside the given transaction (or opens one) so the entry is atomic with its source document. */
+  async postEntry(params: PostEntryParams, db: Prisma.TransactionClient | PrismaService = this.prisma) {
+    const totalDebit = params.lines.reduce((sum, l) => sum + (l.debit ?? 0n), 0n);
+    const totalCredit = params.lines.reduce((sum, l) => sum + (l.credit ?? 0n), 0n);
+    if (totalDebit !== totalCredit) {
+      throw new BadRequestException(
+        `Jurnal tidak balance: debit ${totalDebit} != kredit ${totalCredit} (ref ${params.refType}#${params.refId})`,
+      );
+    }
+    if (totalDebit === 0n) {
+      throw new BadRequestException("Jurnal kosong (total 0), tidak ada yang diposting");
+    }
+
+    const codes = [...new Set(params.lines.map((l) => l.accountCode))];
+    const accounts = await db.account.findMany({ where: { code: { in: codes } } });
+    const accountByCode = new Map(accounts.map((a) => [a.code, a]));
+    for (const code of codes) {
+      if (!accountByCode.has(code)) {
+        throw new BadRequestException(`Akun dengan kode ${code} belum ada di COA`);
+      }
+    }
+
+    const no = await this.numbering.next("JV", params.companyId, params.date, db);
+
+    return db.journalEntry.create({
+      data: {
+        no,
+        date: params.date,
+        refType: params.refType,
+        refId: params.refId,
+        refNo: params.refNo,
+        type: params.type,
+        isAuto: true,
+        companyId: params.companyId ?? undefined,
+        createdBy: params.createdBy ?? undefined,
+        lines: {
+          create: params.lines
+            .filter((l) => (l.debit ?? 0n) !== 0n || (l.credit ?? 0n) !== 0n)
+            .map((l) => ({
+              accountId: accountByCode.get(l.accountCode)!.id,
+              debit: l.debit ?? 0n,
+              credit: l.credit ?? 0n,
+            })),
+        },
+      },
+      include: { lines: { include: { account: true } } },
+    });
+  }
+
+  // ---- Rule: Faktur Penjualan -> Debit Piutang Usaha (total) | Kredit Penjualan (dpp), PPN Keluaran (ppn)
+  postSalesInvoice(
+    invoice: { id: number; no: string; date: Date; dpp: bigint; ppn: bigint; total: bigint; companyId: number | null },
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    return this.postEntry(
+      {
+        date: invoice.date,
+        refType: "sales_invoice",
+        refId: invoice.id,
+        refNo: invoice.no,
+        type: "Penjualan",
+        companyId: invoice.companyId,
+        createdBy,
+        lines: [
+          { accountCode: COA_CODE.PIUTANG_USAHA, debit: invoice.total },
+          { accountCode: COA_CODE.PENJUALAN, credit: invoice.dpp },
+          { accountCode: COA_CODE.PPN_KELUARAN, credit: invoice.ppn },
+        ],
+      },
+      db,
+    );
+  }
+
+  // ---- Rule: Penerimaan dari pelanggan -> Debit Bank/Kas (total) | Kredit Piutang Usaha (total)
+  postCustomerReceipt(
+    receipt: { id: number; no: string; date: Date; amount: bigint; companyId: number | null },
+    cashAccountCode: string,
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    return this.postEntry(
+      {
+        date: receipt.date,
+        refType: "cash_transaction",
+        refId: receipt.id,
+        refNo: receipt.no,
+        type: "Penerimaan Penjualan",
+        companyId: receipt.companyId,
+        createdBy,
+        lines: [
+          { accountCode: cashAccountCode, debit: receipt.amount },
+          { accountCode: COA_CODE.PIUTANG_USAHA, credit: receipt.amount },
+        ],
+      },
+      db,
+    );
+  }
+
+  // ---- Rule: Faktur Pembelian -> Debit Persediaan/Beban (dpp), PPN Masukan (ppn) | Kredit Utang Usaha (total)
+  postPurchaseInvoice(
+    invoice: { id: number; no: string; date: Date; dpp: bigint; ppn: bigint; total: bigint; companyId: number | null },
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+    debitAccountCode: string = COA_CODE.PERSEDIAAN,
+  ) {
+    return this.postEntry(
+      {
+        date: invoice.date,
+        refType: "purchase_invoice",
+        refId: invoice.id,
+        refNo: invoice.no,
+        type: "Pembelian",
+        companyId: invoice.companyId,
+        createdBy,
+        lines: [
+          { accountCode: debitAccountCode, debit: invoice.dpp },
+          { accountCode: COA_CODE.PPN_MASUKAN, debit: invoice.ppn },
+          { accountCode: COA_CODE.UTANG_USAHA, credit: invoice.total },
+        ],
+      },
+      db,
+    );
+  }
+
+  // ---- Rule: Pembayaran ke pemasok -> Debit Utang Usaha (total) | Kredit Bank/Kas (total)
+  postSupplierPayment(
+    payment: { id: number; no: string; date: Date; amount: bigint; companyId: number | null },
+    cashAccountCode: string,
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    return this.postEntry(
+      {
+        date: payment.date,
+        refType: "cash_transaction",
+        refId: payment.id,
+        refNo: payment.no,
+        type: "Pembayaran Pembelian",
+        companyId: payment.companyId,
+        createdBy,
+        lines: [
+          { accountCode: COA_CODE.UTANG_USAHA, debit: payment.amount },
+          { accountCode: cashAccountCode, credit: payment.amount },
+        ],
+      },
+      db,
+    );
+  }
+
+  // ---- Rule: Penggajian -> Debit Beban Gaji & Upah (gross)
+  //            Kredit Utang PPh 21, Piutang Karyawan (cicilan kasbon+hutang), Utang BPJS, Kas (net pay)
+  postPayroll(
+    payslip: {
+      id: number;
+      period: string;
+      employeeId: number;
+      gross: bigint;
+      bpjs: bigint;
+      taxPph21: bigint;
+      kasbonInstallment: bigint;
+      loanInstallment: bigint;
+      netPay: bigint;
+    },
+    date: Date,
+    companyId: number | null,
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    return this.postEntry(
+      {
+        date,
+        refType: "payslip",
+        refId: payslip.id,
+        refNo: `Payroll ${payslip.period} #${payslip.employeeId}`,
+        type: "Penggajian",
+        companyId,
+        createdBy,
+        lines: [
+          { accountCode: COA_CODE.BEBAN_GAJI, debit: payslip.gross },
+          { accountCode: COA_CODE.UTANG_PPH21, credit: payslip.taxPph21 },
+          { accountCode: COA_CODE.UTANG_BPJS, credit: payslip.bpjs },
+          { accountCode: COA_CODE.PIUTANG_KARYAWAN, credit: payslip.kasbonInstallment + payslip.loanInstallment },
+          { accountCode: COA_CODE.KAS, credit: payslip.netPay },
+        ],
+      },
+      db,
+    );
+  }
+
+  // ---- Rule: Kasbon disetujui -> Debit Piutang Karyawan (amount) | Kredit Kas (amount)
+  postCashAdvanceApproval(
+    advance: { id: number; date: Date; amount: bigint },
+    companyId: number | null,
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    return this.postEntry(
+      {
+        date: advance.date,
+        refType: "cash_advance",
+        refId: advance.id,
+        refNo: `CA-${advance.id}`,
+        type: "Kasbon",
+        companyId,
+        createdBy,
+        lines: [
+          { accountCode: COA_CODE.PIUTANG_KARYAWAN, debit: advance.amount },
+          { accountCode: COA_CODE.KAS, credit: advance.amount },
+        ],
+      },
+      db,
+    );
+  }
+
+  // ---- Rule: Penyusutan bulanan -> Debit Beban Penyusutan | Kredit Akumulasi Penyusutan
+  postDepreciation(
+    asset: { id: number; code: string; companyId: number | null },
+    amount: bigint,
+    period: string,
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    const [year, month] = period.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, 1));
+    return this.postEntry(
+      {
+        date,
+        refType: "fixed_asset",
+        refId: asset.id,
+        refNo: `${asset.code} ${period}`,
+        type: "Penyusutan",
+        companyId: asset.companyId,
+        createdBy,
+        lines: [
+          { accountCode: COA_CODE.BEBAN_PENYUSUTAN, debit: amount },
+          { accountCode: COA_CODE.AKUMULASI_PENYUSUTAN, credit: amount },
+        ],
+      },
+      db,
+    );
+  }
+}

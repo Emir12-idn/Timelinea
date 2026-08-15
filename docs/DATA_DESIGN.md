@@ -1,0 +1,219 @@
+# Emerald Duta Sejahtera — Data Design & Build Spec
+
+Dokumen acuan untuk membangun portal (backend + database) versi asli. Serahkan file ini ke Claude Code CLI sebagai konteks. Frontend prototipe: `EmeraldERP.jsx`.
+
+Brand: navy `#1F3A6E` + gold `#C7A24A`, wordmark **Emerald / Duta Sejahtera** (font Poppins). Istilah "ERP" tidak ditampilkan di UI.
+
+---
+
+## 1. Rekomendasi stack (untuk Claude Code CLI)
+
+- Frontend: React + Vite + Tailwind (lanjutan dari prototipe), komponen sudah bergaya navy/gold.
+- Backend: pilih salah satu — **Laravel** (cocok untuk tim PHP, cepat CRUD + auth + PDF) atau **Node (NestJS) + Prisma**.
+- Database: **PostgreSQL** (atau MySQL/MariaDB kalau self-host di PC lama).
+- PDF/cetak: server-side (Laravel dompdf / Puppeteer) atau tetap `window.print()` dari template HTML.
+- Auth: session/JWT + role-based access (lihat §6).
+- Deploy: self-host (PC jadi server) + domain `.my.id`, atau VPS.
+
+Konvensi: semua tabel punya `id`, `created_at`, `updated_at`, `created_by`. Uang disimpan sebagai integer rupiah (tanpa desimal). Soft delete pakai `deleted_at`.
+
+---
+
+## 2. Daftar modul
+
+| Modul | Fungsi inti |
+|---|---|
+| Pembelian | PR, PO, penerimaan barang, faktur & pembayaran pembelian |
+| Penjualan | penawaran, SO, surat jalan, faktur, penerimaan |
+| Persediaan | barang/jasa, penyesuaian, pindah, grup |
+| Kas & Bank | penerimaan, pembayaran, buku bank, rekonsiliasi |
+| Buku Besar | COA, bukti jurnal (otomatis), buku besar per akun, tutup buku |
+| Aktiva Tetap | daftar aset, penyusutan |
+| Proyek | daftar proyek, PO masuk per proyek, tugas & jadwal, pembelian/SJ per proyek (via tag), BAST, biaya & realisasi, departemen |
+| Absensi & Gaji | data karyawan, absensi harian, lembur, kasbon, hutang, penggajian |
+| Laporan | laba rugi, neraca, umur piutang/utang, biaya proyek, dll |
+| Pengaturan | pemasok, pelanggan, info perusahaan, pengguna & hak akses |
+
+Prinsip yang sudah disepakati: **input di modul asal, modul Proyek hanya menampilkan transaksi yang sudah di-tag `project_id`** — tidak ada input ganda.
+
+---
+
+## 3. Entitas & field
+
+Format: `nama_field: tipe (catatan)`. FK = foreign key.
+
+### Master
+
+**company** (multi-badan usaha / cabang)
+- code, name, npwp, address, is_default
+
+**partner** (pemasok + pelanggan, dibedakan `type`)
+- code, name, type: enum(customer, supplier, both), npwp, address, phone, email, term_days
+
+**employee** (karyawan)
+- nik, name, position, employment_status: enum(tetap, harian, kontrak), base_salary, join_date, is_active
+- relasi: punya banyak attendance, overtime, cash_advance, loan, payslip, task
+
+**item** (barang & jasa)
+- code (part no), name, uom, type: enum(stock, service), group_id (FK item_group), min_stock, last_cost
+- stok berjalan dihitung dari mutasi (jangan simpan angka statis)
+
+**item_group**: code, name, parent_id
+
+**project** (proyek)
+- code, name, customer_id (FK partner), contract_value, start_date, target_date, status: enum(draft, running, done, cancelled)
+
+**department**: code, name
+
+### Transaksi pembelian
+
+**purchase_order** (PO): no, date, supplier_id (FK), project_id (FK, nullable — tag proyek), status: enum(draft, sent, received, cancelled), note
+- **purchase_order_line**: po_id (FK), item_id (FK), qty, unit_price, amount
+
+**goods_receipt** (penerimaan): no, date, po_id (FK), note
+- **goods_receipt_line**: gr_id, po_line_id, qty_received
+
+**purchase_invoice**: no, date, supplier_id, gr_id (FK, nullable), dpp, ppn, total, status: enum(open, paid), due_date
+
+### Transaksi penjualan
+
+**sales_order** (SO): no, date, customer_id (FK), project_id (FK, nullable), status
+- **sales_order_line**: so_id, item_id, qty, unit_price, amount
+
+**delivery_order** (surat jalan): no, date, so_id (FK), project_id (FK, nullable), status
+- **delivery_order_line**: do_id, item_id, qty
+
+**sales_invoice** (faktur penjualan): no, date, customer_id, tax_invoice_no (faktur pajak), po_ref, project_id (nullable), dpp, ppn(11%), total, status: enum(draft, sent, accepted, paid)
+- **sales_invoice_line**: si_id, item_id, part_no, name, qty, uom, unit_price, amount
+- **document_validation** (opsional, meniru "AI validation" Komatsu): si_id, field, input_value, system_value, is_match
+- **document_log**: si_id, action, status, author, at
+
+### Persediaan
+
+**stock_move**: item_id, date, ref_type, ref_id, qty_in, qty_out, project_id (nullable), note
+(semua penerimaan/pengiriman/penyesuaian menulis ke sini; stok = SUM(in) − SUM(out))
+
+### Proyek
+
+**project_task** (gaya MS Project): project_id (FK), name, pic_id (FK employee), plan_start, plan_end, actual_start, actual_end, deadline, progress (0–100), depends_on (FK self, nullable)
+
+**work_report** (laporan pekerjaan karyawan): task_id (FK), employee_id (FK), date, description, progress, photo_url (nullable)
+
+**bast** (berita acara serah terima): no, date, project_id (nullable), po_ref, customer_id, source_invoice_id (FK sales_invoice, nullable — auto-isi item dari PO/faktur)
+- **bast_line**: bast_id, item_id, part_no, name, qty, uom
+
+### Absensi & Gaji
+
+**attendance** (absensi harian): employee_id (FK), date, clock_in, clock_out, status: enum(hadir, izin, sakit, alpha)
+
+**overtime** (lembur): employee_id, date, hours, rate, amount, approved_by (nullable)
+
+**cash_advance** (kasbon): employee_id, date, amount, reason, status: enum(pending, approved, rejected), approved_by, remaining
+- alur: karyawan ajukan → status pending → HRD approve/reject → jika approved tambah `remaining`, dan dikurangi lewat cicilan di payslip
+
+**employee_loan** (hutang pegawai): employee_id, date, principal, remaining, installment
+
+**payslip** (slip gaji): employee_id, period (YYYY-MM), base_salary, allowance, overtime_amount, gross, bpjs, tax_pph21, kasbon_installment, loan_installment, deduction_total, net_pay
+- dihitung: gross = base + allowance + overtime; net = gross − deduction_total
+
+### Akuntansi
+
+**account** (COA) — lihat §5
+- code, name, type: enum(aset, kewajiban, ekuitas, pendapatan, beban), tax_code (KAP Coretax, nullable), tax_name (nullable), parent_id (nullable)
+
+**journal_entry**: no (JV-xxxx), date, ref_type, ref_id, ref_no, type (Penjualan/Pembelian/Penggajian/…), is_auto (bool)
+- **journal_line**: entry_id (FK), account_code (FK account), debit, credit
+- invariant: SUM(debit) = SUM(credit) per entry
+
+**fixed_asset**: code, name, acquisition_date, cost, useful_life_months, method: enum(straight_line), accumulated_depreciation, book_value
+
+---
+
+## 4. Jurnal otomatis ("no man touch") — aturan posting
+
+Setiap transaksi yang di-*posting* otomatis membuat `journal_entry` + `journal_line` (is_auto = true, read-only). Tambah jenis transaksi baru = tambah satu aturan di bawah, engine tetap sama.
+
+| Transaksi | Debit | Kredit |
+|---|---|---|
+| Faktur Penjualan | Piutang Usaha (total) | Penjualan (dpp), PPN Keluaran (ppn) |
+| Penerimaan dari pelanggan | Bank/Kas (total) | Piutang Usaha (total) |
+| Faktur Pembelian | Persediaan/Beban (dpp), PPN Masukan (ppn) | Utang Usaha (total) |
+| Pembayaran ke pemasok | Utang Usaha (total) | Bank/Kas (total) |
+| Penggajian | Beban Gaji & Upah (gross) | Utang PPh 21 (pph21), Utang Kasbon/Kas (sisa) |
+| Kasbon disetujui | Piutang Karyawan (amount) | Kas (amount) |
+| Penyusutan bulanan | Beban Penyusutan | Akumulasi Penyusutan |
+
+Aturan diimplementasi sebagai map `type -> function(trx) -> lines[]`, dipanggil saat dokumen di-*post*. Kunci: engine memvalidasi debit = kredit sebelum menyimpan.
+
+---
+
+## 5. Chart of Accounts (COA)
+
+Akun pajak WAJIB memakai **Kode Akun Pajak (KAP) Coretax** (PER-10/PJ/2024) di field `tax_code`. Akun non-pajak pakai penomoran standar di bawah (silakan ganti bila perusahaan sudah punya COA sendiri).
+
+| Kode | Nama Akun | Tipe | KAP Coretax |
+|---|---|---|---|
+| 1-1100 | Kas | Aset | — |
+| 1-1200 | Bank | Aset | — |
+| 1-1300 | Piutang Usaha | Aset | — |
+| 1-1400 | Persediaan Bahan | Aset | — |
+| 1-1500 | Piutang Karyawan (Kasbon) | Aset | — |
+| 1-1600 | PPN Masukan | Aset | 411211 — PPN Dalam Negeri |
+| 2-2100 | Utang Usaha | Kewajiban | — |
+| 2-2200 | PPN Keluaran | Kewajiban | 411211 — PPN Dalam Negeri |
+| 2-2300 | Utang PPh Pasal 21 | Kewajiban | 411121 — PPh Pasal 21 |
+| 2-2400 | Utang PPh Pasal 23 | Kewajiban | 411124 — PPh Pasal 23 |
+| 2-2500 | Utang PPh Badan 25/29 | Kewajiban | 411126 — PPh Pasal 25/29 Badan |
+| 3-3100 | Modal | Ekuitas | — |
+| 4-4100 | Penjualan | Pendapatan | — |
+| 5-5100 | Harga Pokok Penjualan | Beban | — |
+| 6-6100 | Beban Gaji & Upah | Beban | — |
+
+Referensi KAP lain bila diperlukan: 411128 PPh Final, 411122 PPh Pasal 22, 411212 PPN Impor.
+Catatan: Coretax hanya mendefinisikan KAP untuk jenis pajak, bukan COA umum — jadi hanya akun pajak yang "sesuai Coretax".
+
+---
+
+## 6. Hak akses (role-based)
+
+| Peran | Akses |
+|---|---|
+| Admin / Direksi | semua modul |
+| HRD / Keuangan | Absensi & Gaji, Kas & Bank, Buku Besar, approve kasbon |
+| PIC Proyek | proyek yang dipegang: tugas, progress, pembelian/SJ di-tag proyeknya |
+| Karyawan | portal self-service (lihat bawah) — hanya data miliknya |
+
+**Portal karyawan (self-service)** — menu terbatas, data difilter `employee_id = user`:
+- Beranda Saya (jadwal & tugas hari ini, ringkasan gaji/kasbon)
+- Jadwal & Tugas Saya (project_task where pic_id = saya)
+- Laporan Pekerjaan (buat work_report per task)
+- Pengajuan Kasbon (buat cash_advance status=pending → approval HRD)
+- Slip Gaji (payslip bulan berjalan & sebelumnya)
+- Sisa Kasbon/Hutang (cash_advance.remaining + employee_loan.remaining)
+- Absensi Saya (clock in/out)
+
+Approval kasbon: default **1 level (HRD)**. Bisa dijadikan bertingkat (atasan → HRD) lewat tabel approval bila diperlukan — **keputusan ini masih menunggu konfirmasi.**
+
+---
+
+## 7. Dokumen cetak (print-out)
+
+Template sudah ada di prototipe (`window.print()` + CSS `.printable`). Untuk versi asli, jadikan template server-side/PDF:
+
+- **Faktur Penjualan / Sales Invoice** — kop perusahaan + NPWP, tabel item, DPP/PPN/Total, tanda tangan.
+- **Slip Gaji** — pendapatan (pokok/tunjangan/lembur) vs potongan (BPJS/kasbon/PPh21), terima bersih, sisa hutang.
+- **Berita Acara Serah Terima (BAST)** — auto-isi item dari PO/faktur, dua pihak, tanda tangan.
+- Menyusul: PO cetak, Surat Jalan, rekap absensi, laporan biaya proyek.
+
+---
+
+## 8. Status prototipe & antrean kerja
+
+Sudah hidup di `EmeraldERP.jsx`: Beranda, Pesanan Pembelian, Faktur Penjualan (+detail +cetak), Tugas & Jadwal (MS Project), Data Karyawan, Absensi Harian, Penggajian (+slip), BAST (+cetak), Daftar Akun (COA Coretax), Bukti Jurnal otomatis.
+
+Antrean berikutnya:
+1. Portal karyawan 2-peran (butuh keputusan approval kasbon 1-level/bertingkat).
+2. Buku Besar per akun (saldo berjalan dari journal_line) + Laba Rugi & Neraca.
+3. Posting otomatis untuk penerimaan/pembayaran kas & penyusutan.
+4. Pindah stok/persediaan berbasis `stock_move`.
+5. Sambungkan ke backend + database sesuai dokumen ini.

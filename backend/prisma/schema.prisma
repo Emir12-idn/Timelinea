@@ -1,0 +1,826 @@
+// Emerald Duta Sejahtera — Business Portal
+// Data model following docs/DATA_DESIGN.md (§3 Entitas & field, §4 Jurnal otomatis, §5 COA).
+// Conventions: every table has id/created_at/updated_at (+created_by where user-entered),
+// money stored as BigInt (integer rupiah, no decimals), soft delete via deleted_at.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  admin
+  hrd_keuangan
+  pic_proyek
+  karyawan
+}
+
+enum PartnerType {
+  customer
+  supplier
+  both
+}
+
+enum EmploymentStatus {
+  tetap
+  harian
+  kontrak
+}
+
+enum ItemType {
+  stock
+  service
+}
+
+enum ProjectStatus {
+  draft
+  running
+  done
+  cancelled
+}
+
+enum PoStatus {
+  draft
+  sent
+  received
+  cancelled
+}
+
+enum PurchaseInvoiceStatus {
+  open
+  paid
+}
+
+enum SalesOrderStatus {
+  draft
+  sent
+  fulfilled
+  cancelled
+}
+
+enum DeliveryOrderStatus {
+  draft
+  sent
+  delivered
+  cancelled
+}
+
+enum SalesInvoiceStatus {
+  draft
+  sent
+  accepted
+  paid
+}
+
+enum AttendanceStatus {
+  hadir
+  izin
+  sakit
+  alpha
+}
+
+enum CashAdvanceStatus {
+  pending
+  approved
+  rejected
+}
+
+enum AccountType {
+  aset
+  kewajiban
+  ekuitas
+  pendapatan
+  beban
+}
+
+enum DepreciationMethod {
+  straight_line
+}
+
+enum CashTransactionType {
+  receipt
+  payment
+}
+
+// ---------------------------------------------------------------------------
+// Auth / users
+// ---------------------------------------------------------------------------
+
+model User {
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(karyawan)
+  employeeId   Int?      @unique @map("employee_id")
+  employee     Employee? @relation(fields: [employeeId], references: [id])
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  @@map("users")
+}
+
+// Sequential document numbering per doc type/year/company (PO-2026-000123 style).
+// companyId is a plain scoping key (0 = "no company"), not a FK: Postgres treats
+// NULL as distinct in unique indexes, which would break the upsert-based counter
+// for every "no company" document, so this deliberately isn't nullable.
+model Counter {
+  id        Int    @id @default(autoincrement())
+  key       String
+  year      Int
+  companyId Int    @default(0) @map("company_id")
+  seq       Int    @default(0)
+
+  @@unique([key, year, companyId])
+  @@map("counters")
+}
+
+// ---------------------------------------------------------------------------
+// Master data
+// ---------------------------------------------------------------------------
+
+model Company {
+  id        Int       @id @default(autoincrement())
+  code      String    @unique
+  name      String
+  npwp      String?
+  address   String?
+  isDefault Boolean   @default(false) @map("is_default")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy Int?      @map("created_by")
+  deletedAt DateTime? @map("deleted_at")
+
+  purchaseOrders   PurchaseOrder[]
+  salesOrders      SalesOrder[]
+  purchaseInvoices PurchaseInvoice[]
+  salesInvoices    SalesInvoice[]
+  journalEntries   JournalEntry[]
+  cashTransactions CashTransaction[]
+  fixedAssets      FixedAsset[]
+
+  @@map("companies")
+}
+
+model Partner {
+  id        Int         @id @default(autoincrement())
+  code      String      @unique
+  name      String
+  type      PartnerType
+  npwp      String?
+  address   String?
+  phone     String?
+  email     String?
+  termDays  Int?        @map("term_days")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  createdBy Int?        @map("created_by")
+  deletedAt DateTime?   @map("deleted_at")
+
+  purchaseOrders   PurchaseOrder[]
+  salesOrders      SalesOrder[]
+  purchaseInvoices PurchaseInvoice[]
+  salesInvoices    SalesInvoice[]
+  projects         Project[]
+  cashTransactions CashTransaction[]
+  basts            Bast[]
+
+  @@map("partners")
+}
+
+model Employee {
+  id                Int              @id @default(autoincrement())
+  nik               String           @unique
+  name              String
+  position          String
+  employmentStatus  EmploymentStatus @map("employment_status")
+  baseSalary        BigInt           @map("base_salary")
+  joinDate          DateTime         @map("join_date")
+  isActive          Boolean          @default(true) @map("is_active")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  createdBy         Int?             @map("created_by")
+  deletedAt         DateTime?        @map("deleted_at")
+
+  user         User?
+  attendances  Attendance[]
+  overtimes    Overtime[]
+  cashAdvances CashAdvance[]
+  loans        EmployeeLoan[]
+  payslips     Payslip[]
+  tasks        ProjectTask[]
+  workReports  WorkReport[]
+
+  @@map("employees")
+}
+
+model ItemGroup {
+  id        Int         @id @default(autoincrement())
+  code      String      @unique
+  name      String
+  parentId  Int?        @map("parent_id")
+  parent    ItemGroup?  @relation("ItemGroupParent", fields: [parentId], references: [id])
+  children  ItemGroup[] @relation("ItemGroupParent")
+  items     Item[]
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@map("item_groups")
+}
+
+model Item {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  name      String
+  uom       String
+  type      ItemType
+  groupId   Int?       @map("group_id")
+  group     ItemGroup? @relation(fields: [groupId], references: [id])
+  minStock  Decimal?   @map("min_stock") @db.Decimal(14, 3)
+  lastCost  BigInt?    @map("last_cost")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  createdBy Int?       @map("created_by")
+  deletedAt DateTime?  @map("deleted_at")
+
+  purchaseOrderLines PurchaseOrderLine[]
+  salesOrderLines    SalesOrderLine[]
+  deliveryOrderLines DeliveryOrderLine[]
+  salesInvoiceLines  SalesInvoiceLine[]
+  bastLines          BastLine[]
+  stockMoves         StockMove[]
+
+  @@map("items")
+}
+
+model Project {
+  id            Int           @id @default(autoincrement())
+  code          String        @unique
+  name          String
+  customerId    Int           @map("customer_id")
+  customer      Partner       @relation(fields: [customerId], references: [id])
+  contractValue BigInt?       @map("contract_value")
+  startDate     DateTime?     @map("start_date")
+  targetDate    DateTime?     @map("target_date")
+  status        ProjectStatus @default(draft)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdBy     Int?          @map("created_by")
+  deletedAt     DateTime?     @map("deleted_at")
+
+  purchaseOrders PurchaseOrder[]
+  salesOrders    SalesOrder[]
+  deliveryOrders DeliveryOrder[]
+  salesInvoices  SalesInvoice[]
+  stockMoves     StockMove[]
+  tasks          ProjectTask[]
+  basts          Bast[]
+
+  @@map("projects")
+}
+
+model Department {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("departments")
+}
+
+// ---------------------------------------------------------------------------
+// Pembelian
+// ---------------------------------------------------------------------------
+
+model PurchaseOrder {
+  id         Int       @id @default(autoincrement())
+  no         String    @unique
+  date       DateTime
+  supplierId Int       @map("supplier_id")
+  supplier   Partner   @relation(fields: [supplierId], references: [id])
+  companyId  Int?      @map("company_id")
+  company    Company?  @relation(fields: [companyId], references: [id])
+  projectId  Int?      @map("project_id")
+  project    Project?  @relation(fields: [projectId], references: [id])
+  status     PoStatus  @default(draft)
+  note       String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  Int?      @map("created_by")
+  deletedAt  DateTime? @map("deleted_at")
+
+  lines         PurchaseOrderLine[]
+  goodsReceipts GoodsReceipt[]
+
+  @@index([projectId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id        Int           @id @default(autoincrement())
+  poId      Int           @map("po_id")
+  po        PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  itemId    Int           @map("item_id")
+  item      Item          @relation(fields: [itemId], references: [id])
+  qty       Decimal       @db.Decimal(14, 3)
+  unitPrice BigInt        @map("unit_price")
+  amount    BigInt
+
+  goodsReceiptLines GoodsReceiptLine[]
+
+  @@map("purchase_order_lines")
+}
+
+model GoodsReceipt {
+  id        Int       @id @default(autoincrement())
+  no        String    @unique
+  date      DateTime
+  poId      Int       @map("po_id")
+  po        PurchaseOrder @relation(fields: [poId], references: [id])
+  note      String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy Int?      @map("created_by")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines            GoodsReceiptLine[]
+  purchaseInvoices PurchaseInvoice[]
+
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptLine {
+  id          Int               @id @default(autoincrement())
+  grId        Int               @map("gr_id")
+  gr          GoodsReceipt      @relation(fields: [grId], references: [id], onDelete: Cascade)
+  poLineId    Int               @map("po_line_id")
+  poLine      PurchaseOrderLine @relation(fields: [poLineId], references: [id])
+  qtyReceived Decimal           @map("qty_received") @db.Decimal(14, 3)
+
+  @@map("goods_receipt_lines")
+}
+
+model PurchaseInvoice {
+  id         Int                    @id @default(autoincrement())
+  no         String                 @unique
+  date       DateTime
+  supplierId Int                    @map("supplier_id")
+  supplier   Partner                @relation(fields: [supplierId], references: [id])
+  companyId  Int?                   @map("company_id")
+  company    Company?               @relation(fields: [companyId], references: [id])
+  grId       Int?                   @map("gr_id")
+  gr         GoodsReceipt?          @relation(fields: [grId], references: [id])
+  dpp        BigInt
+  ppn        BigInt
+  total      BigInt
+  status     PurchaseInvoiceStatus  @default(open)
+  dueDate    DateTime?              @map("due_date")
+  createdAt  DateTime               @default(now()) @map("created_at")
+  updatedAt  DateTime               @updatedAt @map("updated_at")
+  createdBy  Int?                   @map("created_by")
+  deletedAt  DateTime?              @map("deleted_at")
+
+  cashTransactions CashTransaction[]
+
+  @@map("purchase_invoices")
+}
+
+// ---------------------------------------------------------------------------
+// Penjualan
+// ---------------------------------------------------------------------------
+
+model SalesOrder {
+  id         Int               @id @default(autoincrement())
+  no         String            @unique
+  date       DateTime
+  customerId Int               @map("customer_id")
+  customer   Partner           @relation(fields: [customerId], references: [id])
+  companyId  Int?              @map("company_id")
+  company    Company?          @relation(fields: [companyId], references: [id])
+  projectId  Int?              @map("project_id")
+  project    Project?          @relation(fields: [projectId], references: [id])
+  status     SalesOrderStatus  @default(draft)
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
+  createdBy  Int?              @map("created_by")
+  deletedAt  DateTime?         @map("deleted_at")
+
+  lines          SalesOrderLine[]
+  deliveryOrders DeliveryOrder[]
+
+  @@index([projectId])
+  @@map("sales_orders")
+}
+
+model SalesOrderLine {
+  id        Int        @id @default(autoincrement())
+  soId      Int        @map("so_id")
+  so        SalesOrder @relation(fields: [soId], references: [id], onDelete: Cascade)
+  itemId    Int        @map("item_id")
+  item      Item       @relation(fields: [itemId], references: [id])
+  qty       Decimal    @db.Decimal(14, 3)
+  unitPrice BigInt     @map("unit_price")
+  amount    BigInt
+
+  @@map("sales_order_lines")
+}
+
+model DeliveryOrder {
+  id         Int                 @id @default(autoincrement())
+  no         String              @unique
+  date       DateTime
+  soId       Int?                @map("so_id")
+  so         SalesOrder?         @relation(fields: [soId], references: [id])
+  projectId  Int?                @map("project_id")
+  project    Project?            @relation(fields: [projectId], references: [id])
+  status     DeliveryOrderStatus @default(draft)
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+  createdBy  Int?                @map("created_by")
+  deletedAt  DateTime?           @map("deleted_at")
+
+  lines DeliveryOrderLine[]
+
+  @@index([projectId])
+  @@map("delivery_orders")
+}
+
+model DeliveryOrderLine {
+  id              Int           @id @default(autoincrement())
+  deliveryOrderId Int           @map("delivery_order_id")
+  deliveryOrder   DeliveryOrder @relation(fields: [deliveryOrderId], references: [id], onDelete: Cascade)
+  itemId          Int           @map("item_id")
+  item            Item          @relation(fields: [itemId], references: [id])
+  qty             Decimal       @db.Decimal(14, 3)
+
+  @@map("delivery_order_lines")
+}
+
+model SalesInvoice {
+  id           Int                @id @default(autoincrement())
+  no           String             @unique
+  date         DateTime
+  customerId   Int                @map("customer_id")
+  customer     Partner            @relation(fields: [customerId], references: [id])
+  companyId    Int?               @map("company_id")
+  company      Company?           @relation(fields: [companyId], references: [id])
+  taxInvoiceNo String?            @map("tax_invoice_no")
+  poRef        String?            @map("po_ref")
+  projectId    Int?               @map("project_id")
+  project      Project?           @relation(fields: [projectId], references: [id])
+  dpp          BigInt
+  ppn          BigInt
+  total        BigInt
+  status       SalesInvoiceStatus @default(draft)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  createdBy    Int?               @map("created_by")
+  deletedAt    DateTime?          @map("deleted_at")
+
+  lines            SalesInvoiceLine[]
+  validations      DocumentValidation[]
+  logs             DocumentLog[]
+  basts            Bast[]
+  cashTransactions CashTransaction[]
+
+  @@index([projectId])
+  @@map("sales_invoices")
+}
+
+model SalesInvoiceLine {
+  id             Int          @id @default(autoincrement())
+  salesInvoiceId Int          @map("sales_invoice_id")
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
+  itemId         Int?         @map("item_id")
+  item           Item?        @relation(fields: [itemId], references: [id])
+  partNo         String?      @map("part_no")
+  name           String
+  qty            Decimal      @db.Decimal(14, 3)
+  uom            String
+  unitPrice      BigInt       @map("unit_price")
+  amount         BigInt
+
+  @@map("sales_invoice_lines")
+}
+
+// Meniru "AI validation" ala Komatsu: bandingkan input vendor vs data sistem.
+model DocumentValidation {
+  id             Int          @id @default(autoincrement())
+  salesInvoiceId Int          @map("sales_invoice_id")
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
+  field          String
+  inputValue     String       @map("input_value")
+  systemValue    String       @map("system_value")
+  isMatch        Boolean      @map("is_match")
+
+  @@map("document_validations")
+}
+
+model DocumentLog {
+  id             Int          @id @default(autoincrement())
+  salesInvoiceId Int          @map("sales_invoice_id")
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
+  action         String
+  status         String
+  author         String
+  at             DateTime     @default(now())
+
+  @@map("document_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Persediaan — semua penerimaan/pengiriman/penyesuaian menulis ke stock_moves;
+// stok berjalan = SUM(qty_in) - SUM(qty_out), tidak disimpan sebagai angka statis.
+// ---------------------------------------------------------------------------
+
+model StockMove {
+  id        Int      @id @default(autoincrement())
+  itemId    Int      @map("item_id")
+  item      Item     @relation(fields: [itemId], references: [id])
+  date      DateTime
+  refType   String   @map("ref_type")
+  refId     Int?     @map("ref_id")
+  qtyIn     Decimal  @default(0) @map("qty_in") @db.Decimal(14, 3)
+  qtyOut    Decimal  @default(0) @map("qty_out") @db.Decimal(14, 3)
+  projectId Int?     @map("project_id")
+  project   Project? @relation(fields: [projectId], references: [id])
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy Int?     @map("created_by")
+
+  @@index([itemId])
+  @@index([projectId])
+  @@map("stock_moves")
+}
+
+// ---------------------------------------------------------------------------
+// Proyek
+// ---------------------------------------------------------------------------
+
+model ProjectTask {
+  id          Int          @id @default(autoincrement())
+  projectId   Int          @map("project_id")
+  project     Project      @relation(fields: [projectId], references: [id])
+  name        String
+  picId       Int?         @map("pic_id")
+  pic         Employee?    @relation(fields: [picId], references: [id])
+  planStart   DateTime?    @map("plan_start")
+  planEnd     DateTime?    @map("plan_end")
+  actualStart DateTime?    @map("actual_start")
+  actualEnd   DateTime?    @map("actual_end")
+  deadline    DateTime?
+  progress    Int          @default(0)
+  dependsOnId Int?         @map("depends_on_id")
+  dependsOn   ProjectTask? @relation("TaskDepends", fields: [dependsOnId], references: [id])
+  dependents  ProjectTask[] @relation("TaskDepends")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  workReports WorkReport[]
+
+  @@index([projectId])
+  @@map("project_tasks")
+}
+
+model WorkReport {
+  id          Int         @id @default(autoincrement())
+  taskId      Int         @map("task_id")
+  task        ProjectTask @relation(fields: [taskId], references: [id])
+  employeeId  Int         @map("employee_id")
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  date        DateTime
+  description String
+  progress    Int
+  photoUrl    String?     @map("photo_url")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@map("work_reports")
+}
+
+model Bast {
+  id              Int           @id @default(autoincrement())
+  no              String        @unique
+  date            DateTime
+  projectId       Int?          @map("project_id")
+  project         Project?      @relation(fields: [projectId], references: [id])
+  poRef           String?       @map("po_ref")
+  customerId      Int           @map("customer_id")
+  customer        Partner       @relation(fields: [customerId], references: [id])
+  sourceInvoiceId Int?          @map("source_invoice_id")
+  sourceInvoice   SalesInvoice? @relation(fields: [sourceInvoiceId], references: [id])
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  createdBy       Int?          @map("created_by")
+
+  lines BastLine[]
+
+  @@map("basts")
+}
+
+model BastLine {
+  id     Int    @id @default(autoincrement())
+  bastId Int    @map("bast_id")
+  bast   Bast   @relation(fields: [bastId], references: [id], onDelete: Cascade)
+  itemId Int?   @map("item_id")
+  item   Item?  @relation(fields: [itemId], references: [id])
+  partNo String? @map("part_no")
+  name   String
+  qty    Decimal @db.Decimal(14, 3)
+  uom    String
+
+  @@map("bast_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Absensi & Gaji
+// ---------------------------------------------------------------------------
+
+model Attendance {
+  id         Int              @id @default(autoincrement())
+  employeeId Int              @map("employee_id")
+  employee   Employee         @relation(fields: [employeeId], references: [id])
+  date       DateTime
+  clockIn    DateTime?        @map("clock_in")
+  clockOut   DateTime?        @map("clock_out")
+  status     AttendanceStatus
+
+  @@unique([employeeId, date])
+  @@map("attendance")
+}
+
+model Overtime {
+  id         Int      @id @default(autoincrement())
+  employeeId Int      @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  date       DateTime
+  hours      Decimal  @db.Decimal(5, 2)
+  rate       BigInt
+  amount     BigInt
+  approvedBy Int?     @map("approved_by")
+
+  @@map("overtime")
+}
+
+// alur: karyawan ajukan (pending) -> HRD approve/reject -> approved menambah `remaining`,
+// dicicil lewat payslip.kasbonInstallment.
+model CashAdvance {
+  id         Int                @id @default(autoincrement())
+  employeeId Int                @map("employee_id")
+  employee   Employee           @relation(fields: [employeeId], references: [id])
+  date       DateTime
+  amount     BigInt
+  reason     String
+  status     CashAdvanceStatus  @default(pending)
+  approvedBy Int?               @map("approved_by")
+  remaining  BigInt
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  @@map("cash_advances")
+}
+
+model EmployeeLoan {
+  id          Int      @id @default(autoincrement())
+  employeeId  Int      @map("employee_id")
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  date        DateTime
+  principal   BigInt
+  remaining   BigInt
+  installment BigInt
+
+  @@map("employee_loans")
+}
+
+model Payslip {
+  id                Int      @id @default(autoincrement())
+  employeeId        Int      @map("employee_id")
+  employee          Employee @relation(fields: [employeeId], references: [id])
+  period            String // format YYYY-MM
+  baseSalary        BigInt   @map("base_salary")
+  allowance         BigInt   @default(0)
+  overtimeAmount    BigInt   @default(0) @map("overtime_amount")
+  gross             BigInt
+  bpjs              BigInt   @default(0)
+  taxPph21          BigInt   @default(0) @map("tax_pph21")
+  kasbonInstallment BigInt   @default(0) @map("kasbon_installment")
+  loanInstallment   BigInt   @default(0) @map("loan_installment")
+  deductionTotal    BigInt   @map("deduction_total")
+  netPay            BigInt   @map("net_pay")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([employeeId, period])
+  @@map("payslips")
+}
+
+// ---------------------------------------------------------------------------
+// Akuntansi
+// ---------------------------------------------------------------------------
+
+model Account {
+  id        Int         @id @default(autoincrement())
+  code      String      @unique
+  name      String
+  type      AccountType
+  taxCode   String?     @map("tax_code") // Kode Akun Pajak (KAP) Coretax, PER-10/PJ/2024
+  taxName   String?     @map("tax_name")
+  parentId  Int?        @map("parent_id")
+  parent    Account?    @relation("AccountParent", fields: [parentId], references: [id])
+  children  Account[]   @relation("AccountParent")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  journalLines     JournalLine[]
+  cashTransactions CashTransaction[]
+
+  @@map("accounts")
+}
+
+// Jurnal SELALU dibuat oleh engine (is_auto = true) dari transaksi lain — lihat
+// JournalService. ref_type/ref_id menunjuk balik ke dokumen sumber secara generik,
+// jadi menambah jenis transaksi baru tidak perlu mengubah skema ini.
+model JournalEntry {
+  id        Int      @id @default(autoincrement())
+  no        String   @unique
+  date      DateTime
+  refType   String   @map("ref_type")
+  refId     Int      @map("ref_id")
+  refNo     String?  @map("ref_no")
+  type      String
+  isAuto    Boolean  @default(true) @map("is_auto")
+  companyId Int?     @map("company_id")
+  company   Company? @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy Int?     @map("created_by")
+
+  lines JournalLine[]
+
+  @@index([refType, refId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id        Int          @id @default(autoincrement())
+  entryId   Int          @map("entry_id")
+  entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId Int          @map("account_id")
+  account   Account      @relation(fields: [accountId], references: [id])
+  debit     BigInt       @default(0)
+  credit    BigInt       @default(0)
+
+  @@map("journal_lines")
+}
+
+model FixedAsset {
+  id                      Int                @id @default(autoincrement())
+  code                    String             @unique
+  name                    String
+  acquisitionDate         DateTime           @map("acquisition_date")
+  cost                    BigInt
+  usefulLifeMonths        Int                @map("useful_life_months")
+  method                  DepreciationMethod @default(straight_line)
+  accumulatedDepreciation BigInt             @default(0) @map("accumulated_depreciation")
+  bookValue               BigInt             @map("book_value")
+  lastDepreciatedPeriod   String?            @map("last_depreciated_period") // YYYY-MM, guards against double-running a period
+  companyId               Int?               @map("company_id")
+  company                 Company?           @relation(fields: [companyId], references: [id])
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+
+  @@map("fixed_assets")
+}
+
+// Kas & Bank — minimal: penerimaan dari pelanggan / pembayaran ke pemasok,
+// cukup untuk memicu aturan jurnal §4. Buku bank & rekonsiliasi menyusul.
+model CashTransaction {
+  id                Int                 @id @default(autoincrement())
+  no                String              @unique
+  type              CashTransactionType
+  date              DateTime
+  partnerId         Int?                @map("partner_id")
+  partner           Partner?            @relation(fields: [partnerId], references: [id])
+  accountId         Int                 @map("account_id") // akun Kas/Bank yang dipakai
+  account           Account             @relation(fields: [accountId], references: [id])
+  amount            BigInt
+  salesInvoiceId    Int?                @map("sales_invoice_id")
+  salesInvoice      SalesInvoice?       @relation(fields: [salesInvoiceId], references: [id])
+  purchaseInvoiceId Int?                @map("purchase_invoice_id")
+  purchaseInvoice   PurchaseInvoice?    @relation(fields: [purchaseInvoiceId], references: [id])
+  companyId         Int?                @map("company_id")
+  company           Company?            @relation(fields: [companyId], references: [id])
+  note              String?
+  createdAt         DateTime            @default(now()) @map("created_at")
+  createdBy         Int?                @map("created_by")
+
+  @@map("cash_transactions")
+}

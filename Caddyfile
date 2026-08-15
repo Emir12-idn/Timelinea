@@ -1,0 +1,12 @@
+{$DOMAIN} {
+	handle_path /api/* {
+		reverse_proxy backend:3000 {
+			header_up Host {host}
+		}
+	}
+
+	# Frontend belum di-deploy lewat compose ini (lihat DEPLOY.md) — untuk sekarang
+	# selain /api/* akan 404. Ganti blok ini dengan `root * /srv` + `file_server`
+	# begitu build frontend (Vite `dist/`) sudah ditaruh di server.
+	respond "Emerald backend jalan. Frontend belum di-deploy di sini." 200
+}
