@@ -4,6 +4,7 @@ import { JournalService } from "../../accounting/journal/journal.service";
 import { percentOf, minBigInt } from "../../common/money.util";
 import { PdfService } from "../../printing/pdf.service";
 import { slipGajiHtml } from "../../printing/templates/slip-gaji.template";
+import { displayName } from "../../auth/role-label.util";
 import { GeneratePayslipDto } from "./dto/generate-payslip.dto";
 
 const DEFAULT_ALLOWANCE = 750_000n;
@@ -151,7 +152,7 @@ export class PayslipsService {
       ...payslip,
       sisaKasbon: kasbonAgg._sum.remaining ?? 0n,
       sisaHutang: loanAgg._sum.remaining ?? 0n,
-      issuedByName: issuer?.name ?? null,
+      issuedByName: issuer ? displayName(issuer.name, issuer.role) : null,
     });
     return this.pdf.renderHtmlToPdf(html);
   }

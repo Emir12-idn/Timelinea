@@ -3,6 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
 import { PdfService } from "../../printing/pdf.service";
 import { suratJalanHtml } from "../../printing/templates/surat-jalan.template";
+import { displayName } from "../../auth/role-label.util";
 import { CreateDeliveryOrderDto } from "./dto/create-delivery-order.dto";
 
 const DELIVERY_ORDER_DETAIL_INCLUDE = {
@@ -88,7 +89,7 @@ export class DeliveryOrdersService {
       date: deliveryOrder.date,
       customerName: deliveryOrder.so?.customer.name ?? deliveryOrder.project?.customer.name ?? "-",
       lines: deliveryOrder.lines,
-      issuedByName: issuer?.name ?? null,
+      issuedByName: issuer ? displayName(issuer.name, issuer.role) : null,
     });
     return this.pdf.renderHtmlToPdf(html);
   }

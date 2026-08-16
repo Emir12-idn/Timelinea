@@ -26,12 +26,12 @@ export class SalesInvoicesController {
 
   @Post()
   create(@Body() dto: CreateSalesInvoiceDto, @CurrentUser() user: AuthUser) {
-    return this.service.create(dto, user.id, user.name);
+    return this.service.create(dto, user.id, user.displayName);
   }
 
   @Patch(":id/status")
   updateStatus(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdateSalesInvoiceStatusDto, @CurrentUser() user: AuthUser) {
-    return this.service.updateStatus(id, dto.status, user.name);
+    return this.service.updateStatus(id, dto.status, user.displayName);
   }
 
   @Post(":id/validate")

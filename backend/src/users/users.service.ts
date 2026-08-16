@@ -1,6 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
+import { Role } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { displayName } from "../auth/role-label.util";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 
@@ -15,18 +17,24 @@ const SAFE_SELECT = {
   updatedAt: true,
 } as const;
 
+/** Adds the computed "{RoleLabel} {name}" (e.g. "HRD Agus") to a user record. */
+function withDisplayName<T extends { name: string; role: Role }>(user: T) {
+  return { ...user, displayName: displayName(user.name, user.role) };
+}
+
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
-    return this.prisma.user.findMany({ where: { deletedAt: null }, select: SAFE_SELECT, orderBy: { name: "asc" } });
+    const users = await this.prisma.user.findMany({ where: { deletedAt: null }, select: SAFE_SELECT, orderBy: { name: "asc" } });
+    return users.map(withDisplayName);
   }
 
   async findOne(id: number) {
     const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null }, select: SAFE_SELECT });
     if (!user) throw new NotFoundException("Pengguna tidak ditemukan");
-    return user;
+    return withDisplayName(user);
   }
 
   async create(dto: CreateUserDto) {
@@ -34,7 +42,7 @@ export class UsersService {
     if (existing) throw new ConflictException("Email sudah terdaftar");
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    return this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
         name: dto.name,
         email: dto.email,
@@ -45,11 +53,12 @@ export class UsersService {
       },
       select: SAFE_SELECT,
     });
+    return withDisplayName(user);
   }
 
   async update(id: number, dto: UpdateUserDto) {
     await this.findOne(id);
-    return this.prisma.user.update({
+    const user = await this.prisma.user.update({
       where: { id },
       data: {
         name: dto.name,
@@ -60,6 +69,7 @@ export class UsersService {
       },
       select: SAFE_SELECT,
     });
+    return withDisplayName(user);
   }
 
   async remove(id: number) {

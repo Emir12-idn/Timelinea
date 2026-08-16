@@ -3,6 +3,7 @@ import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthUser, JwtPayload } from "./auth.types";
+import { displayName } from "./role-label.util";
 
 @Injectable()
 export class AuthService {
@@ -18,7 +19,14 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException("Email atau password salah");
 
-    return { id: user.id, email: user.email, name: user.name, role: user.role, employeeId: user.employeeId };
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      displayName: displayName(user.name, user.role),
+      role: user.role,
+      employeeId: user.employeeId,
+    };
   }
 
   async login(user: AuthUser) {
@@ -31,7 +39,14 @@ export class AuthService {
 
   async me(userId: number): Promise<AuthUser> {
     const user = await this.prisma.user.findFirstOrThrow({ where: { id: userId, deletedAt: null } });
-    return { id: user.id, email: user.email, name: user.name, role: user.role, employeeId: user.employeeId };
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      displayName: displayName(user.name, user.role),
+      role: user.role,
+      employeeId: user.employeeId,
+    };
   }
 
   async changePassword(userId: number, currentPassword: string, newPassword: string) {

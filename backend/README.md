@@ -55,6 +55,13 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   `admin`, `hrd_keuangan`, `pic_proyek`, `karyawan`. Self-service endpoints
   (work reports, attendance, cash advances, payslips) scope results to the
   caller's linked `employeeId` when the role is `karyawan`.
+- **Display names are role-prefixed** ("HRD Agus", "Admin Administrator" —
+  `src/auth/role-label.util.ts`'s `displayName()`). Computed from `name` +
+  `role` wherever a person needs identifying — `/auth/login` and `/auth/me`,
+  the `/users` list, the document-log author on Faktur Penjualan, and the
+  PIC name in PDF digital-signature blocks — never stored, so it can't go
+  stale if the account's role changes. `ROLE_LABEL` in the same file is the
+  one place to edit the abbreviations.
 - **PDF print-outs** (`src/printing/`) render plain HTML (no React/Tailwind
   dependency — same visual style as the prototype's `window.print()`
   templates, simplified further per a reference vendor-portal invoice) to
