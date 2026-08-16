@@ -85,13 +85,24 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
     since faktur pajak needs it) — only the recipient's address appears
     where relevant (e.g. Faktur Penjualan's "Kepada:").
   - **Two signature styles.** Faktur Penjualan and BAST are legal documents
-    exchanged with an external party and get `ttdBlock()` — blank lines for
-    wet ink + company stamp. Everything else (Slip Gaji, Surat Jalan, and
-    any future Laporan Keuangan/Pajak print-out) is issued electronically
-    via `digitalSignatureBlock()` — it prints the name of whoever
-    triggered the action (`createdBy`, resolved to the `User`) instead of
-    a line to sign. New print templates should default to the digital
-    block unless the document is genuinely one that needs ink/stamp.
+    exchanged with an external party and get a wet-ink block. Everything
+    else (Slip Gaji, Surat Jalan, and any future Laporan Keuangan/Pajak
+    print-out) is issued electronically via `digitalSignatureBlock()` — it
+    prints the name of whoever triggered the action (`createdBy`, resolved
+    to the `User`) instead of a line to sign. New print templates should
+    default to the digital block unless the document is genuinely one that
+    needs ink/stamp. Within the wet-ink pair, `ttdBlock()` is for documents
+    both parties sign (BAST — proof of handover); Faktur Penjualan uses
+    `sellerSignatureBlock()` instead — an invoice is billing, not a receipt,
+    so there's no "Penerima" column for the buyer to sign.
+  - **Faktur Penjualan wording**: labeled "Subtotal" (not "DPP" — that's
+    the formal e-Faktur Pajak term, this is a commercial invoice) plus a
+    "PPh (dipotong pembeli)" line, matching how real Indonesian sales
+    invoices are commonly laid out. `SalesInvoice.pph` is informational
+    only (optional on create, defaults to 0) — it doesn't reduce `total`
+    or feed the journal engine, since withholding is the buyer's own
+    bookkeeping. Line items' `partNo` auto-fills from the selected
+    `Item.code` when not given explicitly (`SalesInvoicesService.create`).
 
 ## What's implemented vs. still open
 

@@ -1,4 +1,4 @@
-import { renderDocument, ttdBlock } from "../layout.util";
+import { renderDocument, sellerSignatureBlock } from "../layout.util";
 import { formatDate, qty, rupiah } from "../format.util";
 
 interface SalesInvoiceForPrint {
@@ -7,6 +7,7 @@ interface SalesInvoiceForPrint {
   poRef: string | null;
   dpp: bigint;
   ppn: bigint;
+  pph: bigint;
   total: bigint;
   customer: { name: string; address: string | null };
   lines: { partNo: string | null; name: string; qty: unknown; uom: string; unitPrice: bigint; amount: bigint }[];
@@ -56,12 +57,13 @@ export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
     </table>
     <div class="totals">
       <table>
-        <tr><td class="label">DPP</td><td class="num">${rupiah(invoice.dpp)}</td></tr>
+        <tr><td class="label">Subtotal</td><td class="num">${rupiah(invoice.dpp)}</td></tr>
         <tr><td class="label">PPN 11%</td><td class="num">${rupiah(invoice.ppn)}</td></tr>
+        <tr><td class="label">PPh (dipotong pembeli)</td><td class="num">${rupiah(invoice.pph)}</td></tr>
         <tr class="grand"><td>Total</td><td class="num">${rupiah(invoice.total)}</td></tr>
       </table>
     </div>
-    ${ttdBlock("Penerima,", "Hormat kami, Emerald Duta Sejahtera")}
+    ${sellerSignatureBlock("Hormat kami, Emerald Duta Sejahtera")}
   `;
 
   return renderDocument(`Faktur ${invoice.no}`, body);

@@ -455,6 +455,9 @@ model SalesInvoice {
   project      Project?           @relation(fields: [projectId], references: [id])
   dpp          BigInt
   ppn          BigInt
+  // PPh dipotong oleh pembeli (informational only) — tidak mengurangi `total` atau
+  // masuk ke jurnal otomatis; withholding tax itu urusan pencatatan pembeli.
+  pph          BigInt             @default(0)
   total        BigInt
   status       SalesInvoiceStatus @default(draft)
   createdAt    DateTime           @default(now()) @map("created_at")

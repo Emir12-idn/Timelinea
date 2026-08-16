@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { ArrayMinSize, IsDateString, IsInt, IsOptional, IsString, ValidateNested } from "class-validator";
+import { ArrayMinSize, IsDateString, IsInt, IsOptional, IsString, Min, ValidateNested } from "class-validator";
 import { SalesInvoiceLineDto } from "./sales-invoice-line.dto";
 
 export class CreateSalesInvoiceDto {
@@ -27,6 +27,13 @@ export class CreateSalesInvoiceDto {
   @Type(() => Number)
   @IsInt()
   projectId?: number;
+
+  /** PPh yang akan dipotong pembeli (informational, default 0) — lihat catatan di schema.prisma. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  pph?: number;
 
   @ValidateNested({ each: true })
   @Type(() => SalesInvoiceLineDto)

@@ -114,7 +114,7 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
               <Plus size={14} /> Tambah baris
             </button>
             <div className="text-right text-sm text-slate-600">
-              <div>DPP: {rupiah(dpp)}</div>
+              <div>Subtotal: {rupiah(dpp)}</div>
               <div>PPN 11%: {rupiah(ppn)}</div>
               <div className="font-semibold text-slate-800">Total: {rupiah(dpp + ppn)}</div>
             </div>
@@ -188,8 +188,14 @@ function InvoiceDetail({ id, onBack }) {
         </Card>
         <Card className="p-4">
           <dl className="grid grid-cols-2 gap-y-3 text-sm">
-            <dt className="text-slate-500">DPP</dt><dd className="text-right font-medium tabular-nums text-slate-700">{rupiah(d.dpp)}</dd>
+            <dt className="text-slate-500">Subtotal</dt><dd className="text-right font-medium tabular-nums text-slate-700">{rupiah(d.dpp)}</dd>
             <dt className="text-slate-500">PPN 11%</dt><dd className="text-right font-medium tabular-nums text-slate-700">{rupiah(d.ppn)}</dd>
+            {Number(d.pph) > 0 && (
+              <>
+                <dt className="text-slate-500">PPh (dipotong pembeli)</dt>
+                <dd className="text-right font-medium tabular-nums text-slate-700">{rupiah(d.pph)}</dd>
+              </>
+            )}
             <dt className="border-t border-slate-100 pt-2 font-semibold text-slate-700">Total</dt>
             <dd className="border-t border-slate-100 pt-2 text-right text-base font-bold tabular-nums text-blue-900">{rupiah(d.total)}</dd>
           </dl>

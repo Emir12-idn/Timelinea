@@ -34,6 +34,8 @@ const BASE_CSS = `
   .ttd .slot { width: 45%; }
   .ttd .label { color: #555555; margin-bottom: 56px; }
   .ttd .line { border-top: 1px solid #000000; padding-top: 4px; }
+  .ttd.single { justify-content: flex-end; }
+  .ttd.single .slot { width: 45%; }
 
   /* Digital-signature block — for documents that don't need ink: Slip Gaji,
      Surat Jalan, (future) Laporan Keuangan/Pajak. Shows the PIC's real name
@@ -67,11 +69,20 @@ export function renderDocument(title: string, bodyHtml: string): string {
 </html>`;
 }
 
-/** Blank lines for wet ink + company stamp — Faktur Penjualan & BAST only. */
+/** Blank lines for wet ink + company stamp, one per party — BAST (both sides sign). */
 export function ttdBlock(kiri: string, kanan: string): string {
   return `<div class="ttd">
     <div class="slot"><div class="label">${kiri}</div><div class="line">( .................... )</div></div>
     <div class="slot"><div class="label">${kanan}</div><div class="line">( .................... )</div></div>
+  </div>`;
+}
+
+/** Single wet-ink block for the seller only — Faktur Penjualan. A "Penerima" (buyer
+ * receipt) column doesn't belong on an invoice: that confirmation lives on the
+ * Surat Jalan/BAST, not on billing paperwork. */
+export function sellerSignatureBlock(label: string): string {
+  return `<div class="ttd single">
+    <div class="slot"><div class="label">${label}</div><div class="line">( .................... )</div></div>
   </div>`;
 }
 

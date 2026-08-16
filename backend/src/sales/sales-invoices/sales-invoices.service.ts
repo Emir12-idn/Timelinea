@@ -46,12 +46,21 @@ export class SalesInvoicesService {
   /** Faktur penjualan diposting ke jurnal begitu dibuat — lihat §4 di data design. */
   async create(dto: CreateSalesInvoiceDto, createdBy?: number, authorName = "system") {
     const date = new Date(dto.date);
+
+    // Part No di cetakan ikut kode Barang & Jasa (Item.code) kalau baris tidak
+    // mengisinya sendiri — supaya kolom "Part No" di Faktur Penjualan tidak kosong.
+    const itemIds = [...new Set(dto.lines.map((l) => l.itemId).filter((id): id is number => id !== undefined))];
+    const items = itemIds.length ? await this.prisma.item.findMany({ where: { id: { in: itemIds } } }) : [];
+    const itemCodeById = new Map(items.map((i) => [i.id, i.code]));
+
     const lines = dto.lines.map((l) => ({
       ...l,
+      partNo: l.partNo ?? (l.itemId ? itemCodeById.get(l.itemId) : undefined),
       amount: lineAmount(BigInt(l.unitPrice), l.qty),
     }));
     const dpp = lines.reduce((sum, l) => sum + l.amount, 0n);
     const ppn = BigInt(Math.round(Number(dpp) * PPN_RATE));
+    const pph = BigInt(dto.pph ?? 0);
     const total = dpp + ppn;
 
     return this.prisma.$transaction(async (tx) => {
@@ -67,6 +76,7 @@ export class SalesInvoicesService {
           projectId: dto.projectId,
           dpp,
           ppn,
+          pph,
           total,
           status: "draft",
           createdBy,
