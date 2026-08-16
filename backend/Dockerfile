@@ -11,6 +11,12 @@ RUN npm prune --omit=dev
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Chromium for server-side PDF print-outs (Faktur/Slip Gaji/BAST) via puppeteer-core —
+# it drives this system browser instead of downloading its own.
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma

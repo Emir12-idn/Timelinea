@@ -3,6 +3,8 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
 import { lineAmount } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
+import { PdfService } from "../../printing/pdf.service";
+import { fakturPenjualanHtml } from "../../printing/templates/faktur-penjualan.template";
 import { CreateSalesInvoiceDto } from "./dto/create-sales-invoice.dto";
 import { ValidateFieldsDto } from "./dto/validate-fields.dto";
 import { SalesInvoiceStatus } from "@prisma/client";
@@ -15,6 +17,7 @@ export class SalesInvoicesService {
     private prisma: PrismaService,
     private numbering: NumberingService,
     private journal: JournalService,
+    private pdf: PdfService,
   ) {}
 
   findAll(status?: SalesInvoiceStatus) {
@@ -126,5 +129,11 @@ export class SalesInvoicesService {
     });
     await this.prisma.documentValidation.createMany({ data: rows });
     return this.prisma.documentValidation.findMany({ where: { salesInvoiceId: id } });
+  }
+
+  async renderPdf(id: number): Promise<Buffer> {
+    const invoice = await this.findOne(id);
+    const html = fakturPenjualanHtml(invoice);
+    return this.pdf.renderHtmlToPdf(html);
   }
 }

@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { PrismaService } from "../../prisma/prisma.service";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { percentOf, minBigInt } from "../../common/money.util";
+import { PdfService } from "../../printing/pdf.service";
+import { slipGajiHtml } from "../../printing/templates/slip-gaji.template";
 import { GeneratePayslipDto } from "./dto/generate-payslip.dto";
 
 const DEFAULT_ALLOWANCE = 750_000n;
@@ -12,6 +14,7 @@ export class PayslipsService {
   constructor(
     private prisma: PrismaService,
     private journal: JournalService,
+    private pdf: PdfService,
   ) {}
 
   findAll(employeeId?: number, period?: string) {
@@ -20,6 +23,12 @@ export class PayslipsService {
       include: { employee: true },
       orderBy: [{ period: "desc" }, { employeeId: "asc" }],
     });
+  }
+
+  async findOne(id: number) {
+    const payslip = await this.prisma.payslip.findUnique({ where: { id }, include: { employee: true } });
+    if (!payslip) throw new NotFoundException("Slip gaji tidak ditemukan");
+    return payslip;
   }
 
   /**
@@ -122,5 +131,25 @@ export class PayslipsService {
 
       return payslip;
     });
+  }
+
+  async renderPdf(id: number): Promise<Buffer> {
+    const payslip = await this.findOne(id);
+    const [kasbonAgg, loanAgg] = await Promise.all([
+      this.prisma.cashAdvance.aggregate({
+        where: { employeeId: payslip.employeeId, status: "approved", remaining: { gt: 0 } },
+        _sum: { remaining: true },
+      }),
+      this.prisma.employeeLoan.aggregate({
+        where: { employeeId: payslip.employeeId, remaining: { gt: 0 } },
+        _sum: { remaining: true },
+      }),
+    ]);
+    const html = slipGajiHtml({
+      ...payslip,
+      sisaKasbon: kasbonAgg._sum.remaining ?? 0n,
+      sisaHutang: loanAgg._sum.remaining ?? 0n,
+    });
+    return this.pdf.renderHtmlToPdf(html);
   }
 }

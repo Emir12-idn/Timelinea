@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { Response } from "express";
 import { SalesInvoiceStatus } from "@prisma/client";
 import { SalesInvoicesService } from "./sales-invoices.service";
 import { CreateSalesInvoiceDto } from "./dto/create-sales-invoice.dto";
@@ -36,5 +37,12 @@ export class SalesInvoicesController {
   @Post(":id/validate")
   validateFields(@Param("id", ParseIntPipe) id: number, @Body() dto: ValidateFieldsDto) {
     return this.service.validateFields(id, dto);
+  }
+
+  @Get(":id/print")
+  async print(@Param("id", ParseIntPipe) id: number, @Res() res: Response) {
+    const pdf = await this.service.renderPdf(id);
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="faktur-${id}.pdf"` });
+    res.send(pdf);
   }
 }

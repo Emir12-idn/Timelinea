@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
+import { PdfService } from "../../printing/pdf.service";
+import { bastHtml } from "../../printing/templates/bast.template";
 import { CreateBastDto } from "./dto/create-bast.dto";
 
 @Injectable()
@@ -8,6 +10,7 @@ export class BastsService {
   constructor(
     private prisma: PrismaService,
     private numbering: NumberingService,
+    private pdf: PdfService,
   ) {}
 
   findAll() {
@@ -62,5 +65,11 @@ export class BastsService {
       },
       include: { lines: true },
     });
+  }
+
+  async renderPdf(id: number): Promise<Buffer> {
+    const bast = await this.findOne(id);
+    const html = bastHtml(bast);
+    return this.pdf.renderHtmlToPdf(html);
   }
 }

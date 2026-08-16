@@ -46,6 +46,15 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   `admin`, `hrd_keuangan`, `pic_proyek`, `karyawan`. Self-service endpoints
   (work reports, attendance, cash advances, payslips) scope results to the
   caller's linked `employeeId` when the role is `karyawan`.
+- **PDF print-outs** (`src/printing/`) render plain HTML (no React/Tailwind
+  dependency — same visual style as the prototype's `window.print()`
+  templates, simplified further per a reference vendor-portal invoice) to
+  PDF via `puppeteer-core`, driving a system-installed Chromium rather than
+  bundling one. `GET /api/sales-invoices/:id/print`,
+  `/api/basts/:id/print`, `/api/payslips/:id/print` return
+  `application/pdf` directly. Needs `PUPPETEER_EXECUTABLE_PATH` pointing at
+  a real Chromium/Chrome — the Docker image installs one automatically (see
+  Dockerfile); for local dev set it in `.env` (see `.env.example`).
 
 ## What's implemented vs. still open
 
@@ -61,10 +70,8 @@ Not built yet (see docs/DATA_DESIGN.md §8 antrean kerja for the source list):
   `journal_lines` and `payslips`/invoices, this is a reporting layer on top.
 - Bank reconciliation / buku bank (only receipt & payment are modeled).
 - Purchase/sales retur (return) documents.
-- PDF generation for print-outs (Faktur, Slip Gaji, BAST) — the prototype's
-  `window.print()` templates already have the layout; wiring them to real
-  data from these endpoints is straightforward, a server-side PDF step
-  (e.g. Puppeteer) is optional on top.
+- PDF print-out for PO (only Faktur Penjualan, Slip Gaji, and BAST are
+  wired up so far — same `src/printing/` pattern extends easily to PO).
 - Tiered kasbon approval (spec left this "waiting on confirmation" — current
   implementation is single-level HRD approval per the stated default).
 
