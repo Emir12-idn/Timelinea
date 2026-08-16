@@ -14,7 +14,6 @@ import { ItemsModule } from "./master/items/items.module";
 import { ProjectsModule } from "./master/projects/projects.module";
 import { DepartmentsModule } from "./master/departments/departments.module";
 import { PurchaseOrdersModule } from "./purchasing/purchase-orders/purchase-orders.module";
-import { GoodsReceiptsModule } from "./purchasing/goods-receipts/goods-receipts.module";
 import { PurchaseInvoicesModule } from "./purchasing/purchase-invoices/purchase-invoices.module";
 import { SalesOrdersModule } from "./sales/sales-orders/sales-orders.module";
 import { DeliveryOrdersModule } from "./sales/delivery-orders/delivery-orders.module";
@@ -48,7 +47,6 @@ import { FixedAssetsModule } from "./fixed-assets/fixed-assets.module";
     ProjectsModule,
     DepartmentsModule,
     PurchaseOrdersModule,
-    GoodsReceiptsModule,
     PurchaseInvoicesModule,
     SalesOrdersModule,
     DeliveryOrdersModule,

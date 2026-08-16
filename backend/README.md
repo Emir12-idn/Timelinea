@@ -42,6 +42,15 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   didn't list — called out in the seed file and `coa-codes.ts`.
 - **Soft delete**: master data and most documents use `deleted_at` instead
   of a real `DELETE`; every `findAll`/`findOne` filters it out.
+- **No GRN.** The data design's §3 originally modeled a `goods_receipt`
+  step between PO and Faktur Pembelian, but Emerald doesn't issue GRNs
+  itself — that's the principal/customer's document on the sales side
+  (see e.g. Komatsu's vendor portal), and isn't used internally either.
+  So `POST /api/purchase-invoices` with a `poId` does both jobs at once:
+  it posts the invoice *and* creates the stock-in `stock_move`s from the
+  PO's lines, marking the PO `received`. `PurchaseOrderLine` no longer
+  has a receipt-quantity concept — the invoice is trusted for the full PO
+  line qty.
 - **Role-based access** (`src/common/guards/roles.guard.ts`) follows §6:
   `admin`, `hrd_keuangan`, `pic_proyek`, `karyawan`. Self-service endpoints
   (work reports, attendance, cash advances, payslips) scope results to the
@@ -61,9 +70,10 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
 Full CRUD + the journal engine is in for every module referenced by the
 existing frontend prototype (`EmeraldERP.jsx`): PO, Faktur Penjualan,
 Karyawan, Absensi, Penggajian, BAST, Buku Besar/Jurnal, Daftar Akun — plus
-Pembelian/Penjualan supporting docs (goods receipt, delivery order, sales
-order), Kas & Bank (receipt/payment), stock moves, project tasks/work
-reports, cash advances, employee loans, and fixed assets/depreciation.
+Pembelian/Penjualan supporting docs (delivery order, sales order — see the
+"No GRN" note above for why goods receipt isn't a separate step), Kas &
+Bank (receipt/payment), stock moves, project tasks/work reports, cash
+advances, employee loans, and fixed assets/depreciation.
 
 Not built yet (see docs/DATA_DESIGN.md §8 antrean kerja for the source list):
 - Laporan module (laba rugi / neraca / aging reports) — the data is all in

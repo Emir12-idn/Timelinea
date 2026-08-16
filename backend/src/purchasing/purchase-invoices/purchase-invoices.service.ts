@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
 import { dppFromTotal } from "../../common/money.util";
@@ -17,7 +17,7 @@ export class PurchaseInvoicesService {
   findAll() {
     return this.prisma.purchaseInvoice.findMany({
       where: { deletedAt: null },
-      include: { supplier: true, gr: true },
+      include: { supplier: true, po: true },
       orderBy: { date: "desc" },
     });
   }
@@ -25,13 +25,19 @@ export class PurchaseInvoicesService {
   async findOne(id: number) {
     const inv = await this.prisma.purchaseInvoice.findFirst({
       where: { id, deletedAt: null },
-      include: { supplier: true, gr: { include: { po: true } } },
+      include: { supplier: true, po: { include: { lines: { include: { item: true } } } } },
     });
     if (!inv) throw new NotFoundException("Faktur Pembelian tidak ditemukan");
     return inv;
   }
 
-  /** Faktur pembelian diposting ke jurnal begitu dibuat — lihat §4 di data design. */
+  /**
+   * Faktur pembelian diposting ke jurnal begitu dibuat — lihat §4 di data design.
+   * Emerald tidak menerbitkan GRN sendiri (itu terbitan principal/pelanggan di sisi
+   * penjualan, dan di sisi pembelian internal juga tidak dipakai) — kalau faktur ini
+   * ditautkan ke PO (poId), faktur SEKALIGUS jadi bukti penerimaan: PO otomatis
+   * "received" dan stok item stock-type langsung bertambah dari baris PO tsb.
+   */
   async create(dto: CreatePurchaseInvoiceDto, createdBy?: number) {
     const date = new Date(dto.date);
     const total = BigInt(dto.total);
@@ -39,13 +45,16 @@ export class PurchaseInvoicesService {
     const ppn = dto.ppn !== undefined ? BigInt(dto.ppn) : total - dpp;
 
     let debitAccountCode: string = COA_CODE.PERSEDIAAN;
-    if (dto.grId) {
-      const gr = await this.prisma.goodsReceipt.findFirst({
-        where: { id: dto.grId },
-        include: { lines: { include: { poLine: { include: { item: true } } } } },
-      });
-      if (!gr) throw new NotFoundException("Penerimaan Barang (GR) tidak ditemukan");
-      const allService = gr.lines.every((l) => l.poLine.item.type === "service");
+    const po = dto.poId
+      ? await this.prisma.purchaseOrder.findFirst({
+          where: { id: dto.poId, deletedAt: null },
+          include: { lines: { include: { item: true } } },
+        })
+      : null;
+    if (dto.poId && !po) throw new NotFoundException("Pesanan Pembelian (PO) tidak ditemukan");
+    if (po) {
+      if (po.lines.length === 0) throw new BadRequestException("PO ini belum punya baris item");
+      const allService = po.lines.every((l) => l.item.type === "service");
       debitAccountCode = allService ? COA_CODE.HPP : COA_CODE.PERSEDIAAN;
     }
 
@@ -57,7 +66,7 @@ export class PurchaseInvoicesService {
           date,
           supplierId: dto.supplierId,
           companyId: dto.companyId,
-          grId: dto.grId,
+          poId: dto.poId,
           dpp,
           ppn,
           total,
@@ -65,6 +74,24 @@ export class PurchaseInvoicesService {
           createdBy,
         },
       });
+
+      if (po) {
+        for (const line of po.lines) {
+          await tx.stockMove.create({
+            data: {
+              itemId: line.itemId,
+              date,
+              refType: "purchase_invoice",
+              refId: invoice.id,
+              qtyIn: line.qty,
+              projectId: po.projectId,
+              note: `Faktur Pembelian ${invoice.no} (PO ${po.no})`,
+              createdBy,
+            },
+          });
+        }
+        await tx.purchaseOrder.update({ where: { id: po.id }, data: { status: "received" } });
+      }
 
       await this.journal.postPurchaseInvoice(
         { id: invoice.id, no: invoice.no, date, dpp, ppn, total, companyId: dto.companyId ?? null },

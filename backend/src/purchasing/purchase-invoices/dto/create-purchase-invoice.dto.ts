@@ -14,10 +14,11 @@ export class CreatePurchaseInvoiceDto {
   @IsInt()
   companyId?: number;
 
+  /** Opsional — kalau diisi, faktur ini sekaligus jadi bukti penerimaan barang PO tsb (§4). */
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  grId?: number;
+  poId?: number;
 
   @Type(() => Number)
   @IsInt()

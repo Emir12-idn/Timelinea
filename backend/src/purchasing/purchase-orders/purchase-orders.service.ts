@@ -24,7 +24,7 @@ export class PurchaseOrdersService {
   async findOne(id: number) {
     const po = await this.prisma.purchaseOrder.findFirst({
       where: { id, deletedAt: null },
-      include: { supplier: true, project: true, lines: { include: { item: true } }, goodsReceipts: true },
+      include: { supplier: true, project: true, lines: { include: { item: true } }, purchaseInvoices: true },
     });
     if (!po) throw new NotFoundException("Pesanan Pembelian tidak ditemukan");
     return po;

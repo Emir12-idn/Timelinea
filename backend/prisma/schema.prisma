@@ -199,18 +199,18 @@ model Partner {
 }
 
 model Employee {
-  id                Int              @id @default(autoincrement())
-  nik               String           @unique
-  name              String
-  position          String
-  employmentStatus  EmploymentStatus @map("employment_status")
-  baseSalary        BigInt           @map("base_salary")
-  joinDate          DateTime         @map("join_date")
-  isActive          Boolean          @default(true) @map("is_active")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-  createdBy         Int?             @map("created_by")
-  deletedAt         DateTime?        @map("deleted_at")
+  id               Int              @id @default(autoincrement())
+  nik              String           @unique
+  name             String
+  position         String
+  employmentStatus EmploymentStatus @map("employment_status")
+  baseSalary       BigInt           @map("base_salary")
+  joinDate         DateTime         @map("join_date")
+  isActive         Boolean          @default(true) @map("is_active")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  createdBy        Int?             @map("created_by")
+  deletedAt        DateTime?        @map("deleted_at")
 
   user         User?
   attendances  Attendance[]
@@ -320,8 +320,8 @@ model PurchaseOrder {
   createdBy  Int?      @map("created_by")
   deletedAt  DateTime? @map("deleted_at")
 
-  lines         PurchaseOrderLine[]
-  goodsReceipts GoodsReceipt[]
+  lines            PurchaseOrderLine[]
+  purchaseInvoices PurchaseInvoice[]
 
   @@index([projectId])
   @@map("purchase_orders")
@@ -337,59 +337,33 @@ model PurchaseOrderLine {
   unitPrice BigInt        @map("unit_price")
   amount    BigInt
 
-  goodsReceiptLines GoodsReceiptLine[]
-
   @@map("purchase_order_lines")
 }
 
-model GoodsReceipt {
-  id        Int       @id @default(autoincrement())
-  no        String    @unique
-  date      DateTime
-  poId      Int       @map("po_id")
-  po        PurchaseOrder @relation(fields: [poId], references: [id])
-  note      String?
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  createdBy Int?      @map("created_by")
-  deletedAt DateTime? @map("deleted_at")
-
-  lines            GoodsReceiptLine[]
-  purchaseInvoices PurchaseInvoice[]
-
-  @@map("goods_receipts")
-}
-
-model GoodsReceiptLine {
-  id          Int               @id @default(autoincrement())
-  grId        Int               @map("gr_id")
-  gr          GoodsReceipt      @relation(fields: [grId], references: [id], onDelete: Cascade)
-  poLineId    Int               @map("po_line_id")
-  poLine      PurchaseOrderLine @relation(fields: [poLineId], references: [id])
-  qtyReceived Decimal           @map("qty_received") @db.Decimal(14, 3)
-
-  @@map("goods_receipt_lines")
-}
-
+// Tidak ada goods_receipt: Emerald tidak menerbitkan GRN sendiri untuk pembelian
+// internalnya (beda dengan GRN yang diterbitkan principal/pelanggan seperti Komatsu
+// saat menerima kiriman Emerald — itu di luar sistem ini). Faktur Pembelian di sini
+// SEKALIGUS jadi bukti penerimaan: begitu dibuat & ditautkan ke PO, PO otomatis
+// "received" dan stok item stock-type langsung bertambah dari baris PO tsb.
 model PurchaseInvoice {
-  id         Int                    @id @default(autoincrement())
-  no         String                 @unique
+  id         Int                   @id @default(autoincrement())
+  no         String                @unique
   date       DateTime
-  supplierId Int                    @map("supplier_id")
-  supplier   Partner                @relation(fields: [supplierId], references: [id])
-  companyId  Int?                   @map("company_id")
-  company    Company?               @relation(fields: [companyId], references: [id])
-  grId       Int?                   @map("gr_id")
-  gr         GoodsReceipt?          @relation(fields: [grId], references: [id])
+  supplierId Int                   @map("supplier_id")
+  supplier   Partner               @relation(fields: [supplierId], references: [id])
+  companyId  Int?                  @map("company_id")
+  company    Company?              @relation(fields: [companyId], references: [id])
+  poId       Int?                  @map("po_id")
+  po         PurchaseOrder?        @relation(fields: [poId], references: [id])
   dpp        BigInt
   ppn        BigInt
   total      BigInt
-  status     PurchaseInvoiceStatus  @default(open)
-  dueDate    DateTime?              @map("due_date")
-  createdAt  DateTime               @default(now()) @map("created_at")
-  updatedAt  DateTime               @updatedAt @map("updated_at")
-  createdBy  Int?                   @map("created_by")
-  deletedAt  DateTime?              @map("deleted_at")
+  status     PurchaseInvoiceStatus @default(open)
+  dueDate    DateTime?             @map("due_date")
+  createdAt  DateTime              @default(now()) @map("created_at")
+  updatedAt  DateTime              @updatedAt @map("updated_at")
+  createdBy  Int?                  @map("created_by")
+  deletedAt  DateTime?             @map("deleted_at")
 
   cashTransactions CashTransaction[]
 
@@ -401,20 +375,20 @@ model PurchaseInvoice {
 // ---------------------------------------------------------------------------
 
 model SalesOrder {
-  id         Int               @id @default(autoincrement())
-  no         String            @unique
+  id         Int              @id @default(autoincrement())
+  no         String           @unique
   date       DateTime
-  customerId Int               @map("customer_id")
-  customer   Partner           @relation(fields: [customerId], references: [id])
-  companyId  Int?              @map("company_id")
-  company    Company?          @relation(fields: [companyId], references: [id])
-  projectId  Int?              @map("project_id")
-  project    Project?          @relation(fields: [projectId], references: [id])
-  status     SalesOrderStatus  @default(draft)
-  createdAt  DateTime          @default(now()) @map("created_at")
-  updatedAt  DateTime          @updatedAt @map("updated_at")
-  createdBy  Int?              @map("created_by")
-  deletedAt  DateTime?         @map("deleted_at")
+  customerId Int              @map("customer_id")
+  customer   Partner          @relation(fields: [customerId], references: [id])
+  companyId  Int?             @map("company_id")
+  company    Company?         @relation(fields: [companyId], references: [id])
+  projectId  Int?             @map("project_id")
+  project    Project?         @relation(fields: [projectId], references: [id])
+  status     SalesOrderStatus @default(draft)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+  createdBy  Int?             @map("created_by")
+  deletedAt  DateTime?        @map("deleted_at")
 
   lines          SalesOrderLine[]
   deliveryOrders DeliveryOrder[]
@@ -437,18 +411,18 @@ model SalesOrderLine {
 }
 
 model DeliveryOrder {
-  id         Int                 @id @default(autoincrement())
-  no         String              @unique
-  date       DateTime
-  soId       Int?                @map("so_id")
-  so         SalesOrder?         @relation(fields: [soId], references: [id])
-  projectId  Int?                @map("project_id")
-  project    Project?            @relation(fields: [projectId], references: [id])
-  status     DeliveryOrderStatus @default(draft)
-  createdAt  DateTime            @default(now()) @map("created_at")
-  updatedAt  DateTime            @updatedAt @map("updated_at")
-  createdBy  Int?                @map("created_by")
-  deletedAt  DateTime?           @map("deleted_at")
+  id        Int                 @id @default(autoincrement())
+  no        String              @unique
+  date      DateTime
+  soId      Int?                @map("so_id")
+  so        SalesOrder?         @relation(fields: [soId], references: [id])
+  projectId Int?                @map("project_id")
+  project   Project?            @relation(fields: [projectId], references: [id])
+  status    DeliveryOrderStatus @default(draft)
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+  createdBy Int?                @map("created_by")
+  deletedAt DateTime?           @map("deleted_at")
 
   lines DeliveryOrderLine[]
 
@@ -569,23 +543,23 @@ model StockMove {
 // ---------------------------------------------------------------------------
 
 model ProjectTask {
-  id          Int          @id @default(autoincrement())
-  projectId   Int          @map("project_id")
-  project     Project      @relation(fields: [projectId], references: [id])
+  id          Int           @id @default(autoincrement())
+  projectId   Int           @map("project_id")
+  project     Project       @relation(fields: [projectId], references: [id])
   name        String
-  picId       Int?         @map("pic_id")
-  pic         Employee?    @relation(fields: [picId], references: [id])
-  planStart   DateTime?    @map("plan_start")
-  planEnd     DateTime?    @map("plan_end")
-  actualStart DateTime?    @map("actual_start")
-  actualEnd   DateTime?    @map("actual_end")
+  picId       Int?          @map("pic_id")
+  pic         Employee?     @relation(fields: [picId], references: [id])
+  planStart   DateTime?     @map("plan_start")
+  planEnd     DateTime?     @map("plan_end")
+  actualStart DateTime?     @map("actual_start")
+  actualEnd   DateTime?     @map("actual_end")
   deadline    DateTime?
-  progress    Int          @default(0)
-  dependsOnId Int?         @map("depends_on_id")
-  dependsOn   ProjectTask? @relation("TaskDepends", fields: [dependsOnId], references: [id])
+  progress    Int           @default(0)
+  dependsOnId Int?          @map("depends_on_id")
+  dependsOn   ProjectTask?  @relation("TaskDepends", fields: [dependsOnId], references: [id])
   dependents  ProjectTask[] @relation("TaskDepends")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
 
   workReports WorkReport[]
 
@@ -629,11 +603,11 @@ model Bast {
 }
 
 model BastLine {
-  id     Int    @id @default(autoincrement())
-  bastId Int    @map("bast_id")
-  bast   Bast   @relation(fields: [bastId], references: [id], onDelete: Cascade)
-  itemId Int?   @map("item_id")
-  item   Item?  @relation(fields: [itemId], references: [id])
+  id     Int     @id @default(autoincrement())
+  bastId Int     @map("bast_id")
+  bast   Bast    @relation(fields: [bastId], references: [id], onDelete: Cascade)
+  itemId Int?    @map("item_id")
+  item   Item?   @relation(fields: [itemId], references: [id])
   partNo String? @map("part_no")
   name   String
   qty    Decimal @db.Decimal(14, 3)
@@ -675,17 +649,17 @@ model Overtime {
 // alur: karyawan ajukan (pending) -> HRD approve/reject -> approved menambah `remaining`,
 // dicicil lewat payslip.kasbonInstallment.
 model CashAdvance {
-  id         Int                @id @default(autoincrement())
-  employeeId Int                @map("employee_id")
-  employee   Employee           @relation(fields: [employeeId], references: [id])
+  id         Int               @id @default(autoincrement())
+  employeeId Int               @map("employee_id")
+  employee   Employee          @relation(fields: [employeeId], references: [id])
   date       DateTime
   amount     BigInt
   reason     String
-  status     CashAdvanceStatus  @default(pending)
-  approvedBy Int?               @map("approved_by")
+  status     CashAdvanceStatus @default(pending)
+  approvedBy Int?              @map("approved_by")
   remaining  BigInt
-  createdAt  DateTime           @default(now()) @map("created_at")
-  updatedAt  DateTime           @updatedAt @map("updated_at")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
 
   @@map("cash_advances")
 }
