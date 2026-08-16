@@ -15,6 +15,11 @@ export class CreateCompanyDto {
   @IsString()
   address?: string;
 
+  /** Ditampilkan di print-out Faktur Penjualan, mis. "Bank Mandiri 123-456-7890 a.n. Emerald Duta Sejahtera, PT". */
+  @IsOptional()
+  @IsString()
+  bankAccount?: string;
+
   @IsOptional()
   @IsBoolean()
   isDefault?: boolean;

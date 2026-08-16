@@ -1,4 +1,4 @@
-import { renderDocument, sellerSignatureBlock } from "../layout.util";
+import { renderDocument, preparerBlock } from "../layout.util";
 import { formatDate, qty, rupiah } from "../format.util";
 
 interface SalesInvoiceForPrint {
@@ -10,7 +10,10 @@ interface SalesInvoiceForPrint {
   pph: bigint;
   total: bigint;
   customer: { name: string; address: string | null };
-  lines: { partNo: string | null; name: string; qty: unknown; uom: string; unitPrice: bigint; amount: bigint }[];
+  lines: { partNo: string | null; poRef: string | null; name: string; qty: unknown; uom: string; unitPrice: bigint; amount: bigint }[];
+  bankAccount: string | null;
+  paymentTermDays: number | null;
+  preparedByName: string | null;
 }
 
 export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
@@ -20,6 +23,7 @@ export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
     <tr>
       <td>${i + 1}</td>
       <td>${l.partNo ?? "-"}</td>
+      <td>${l.poRef ?? invoice.poRef ?? "-"}</td>
       <td>${l.name}</td>
       <td class="num">${qty(l.qty)}</td>
       <td>${l.uom}</td>
@@ -38,17 +42,16 @@ export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
           <div style="font-weight:600">${invoice.customer.name}</div>
           <div style="color:#555555">${invoice.customer.address ?? ""}</div>
         </td>
-        <td style="text-align:right">
+        <td>
           <div>No. Faktur : <b>${invoice.no}</b></div>
           <div>Tanggal : ${formatDate(invoice.date)}</div>
-          <div>No. PO : ${invoice.poRef ?? "-"}</div>
         </td>
       </tr>
     </table>
     <table class="items">
       <thead>
         <tr>
-          <th>No</th><th>Part No</th><th>Nama Barang</th>
+          <th>No</th><th>Part No</th><th>No PO</th><th>Nama Barang</th>
           <th class="num">Qty</th><th>Unit</th>
           <th class="num">Harga</th><th class="num">Jumlah</th>
         </tr>
@@ -59,11 +62,21 @@ export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
       <table>
         <tr><td class="label">Subtotal</td><td class="num">${rupiah(invoice.dpp)}</td></tr>
         <tr><td class="label">PPN 11%</td><td class="num">${rupiah(invoice.ppn)}</td></tr>
-        <tr><td class="label">PPh (dipotong pembeli)</td><td class="num">${rupiah(invoice.pph)}</td></tr>
+        ${invoice.pph > 0n ? `<tr><td class="label">PPh (dipotong pembeli)</td><td class="num">${rupiah(invoice.pph)}</td></tr>` : ""}
         <tr class="grand"><td>Total</td><td class="num">${rupiah(invoice.total)}</td></tr>
       </table>
     </div>
-    ${sellerSignatureBlock("Hormat kami, Emerald Duta Sejahtera")}
+    <table style="margin-top:24px;">
+      <tr>
+        <td style="width:60%;vertical-align:top;font-size:11.5px;">
+          ${invoice.bankAccount ? `<div>No. Rekening: ${invoice.bankAccount}</div><br/>` : ""}
+          ${invoice.paymentTermDays ? `<div>Syarat Pembayaran: ${invoice.paymentTermDays} hari setelah tanggal faktur</div>` : ""}
+        </td>
+        <td style="width:40%;vertical-align:top;">
+          ${preparerBlock("Hormat kami,", "Emerald Duta Sejahtera", invoice.preparedByName)}
+        </td>
+      </tr>
+    </table>
   `;
 
   return renderDocument(`Faktur ${invoice.no}`, body);

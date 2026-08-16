@@ -11,6 +11,12 @@ export class SalesInvoiceLineDto {
   @IsString()
   partNo?: string;
 
+  /** No PO per baris — satu faktur bisa menagih barang dari beberapa PO berbeda.
+   * Kosongkan untuk pakai `poRef` di level faktur (kalau ada). */
+  @IsOptional()
+  @IsString()
+  poRef?: string;
+
   @IsString()
   name: string;
 

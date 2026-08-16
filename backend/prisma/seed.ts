@@ -41,7 +41,14 @@ async function main() {
   console.log("Seeding default company...");
   const company = await prisma.company.upsert({
     where: { code: "EDS" },
-    create: { code: "EDS", name: "Emerald Duta Sejahtera", npwp: "01.060.100.3.092.000", isDefault: true },
+    create: {
+      code: "EDS",
+      name: "Emerald Duta Sejahtera",
+      npwp: "01.060.100.3.092.000",
+      // Contoh — ganti lewat PATCH /api/companies/:id, ini yang tampil di Faktur Penjualan.
+      bankAccount: "Bank Mandiri 123-000-4567 a.n. Emerald Duta Sejahtera, PT",
+      isDefault: true,
+    },
     update: {},
   });
 

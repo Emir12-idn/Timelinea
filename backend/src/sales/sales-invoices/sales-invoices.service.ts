@@ -5,6 +5,7 @@ import { lineAmount } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { PdfService } from "../../printing/pdf.service";
 import { fakturPenjualanHtml } from "../../printing/templates/faktur-penjualan.template";
+import { displayName } from "../../auth/role-label.util";
 import { CreateSalesInvoiceDto } from "./dto/create-sales-invoice.dto";
 import { ValidateFieldsDto } from "./dto/validate-fields.dto";
 import { SalesInvoiceStatus } from "@prisma/client";
@@ -84,6 +85,7 @@ export class SalesInvoicesService {
             create: lines.map((l) => ({
               itemId: l.itemId,
               partNo: l.partNo,
+              poRef: l.poRef,
               name: l.name,
               qty: l.qty,
               uom: l.uom,
@@ -143,7 +145,18 @@ export class SalesInvoicesService {
 
   async renderPdf(id: number): Promise<Buffer> {
     const invoice = await this.findOne(id);
-    const html = fakturPenjualanHtml(invoice);
+    const [company, preparer] = await Promise.all([
+      invoice.companyId
+        ? this.prisma.company.findUnique({ where: { id: invoice.companyId } })
+        : this.prisma.company.findFirst({ where: { isDefault: true, deletedAt: null } }),
+      invoice.createdBy ? this.prisma.user.findUnique({ where: { id: invoice.createdBy } }) : null,
+    ]);
+    const html = fakturPenjualanHtml({
+      ...invoice,
+      bankAccount: company?.bankAccount ?? null,
+      paymentTermDays: invoice.customer.termDays ?? null,
+      preparedByName: preparer ? displayName(preparer.name, preparer.role) : null,
+    });
     return this.pdf.renderHtmlToPdf(html);
   }
 }

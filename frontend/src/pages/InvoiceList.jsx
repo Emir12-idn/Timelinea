@@ -9,7 +9,7 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? "");
   const [poRef, setPoRef] = useState("");
-  const [lines, setLines] = useState([{ itemId: items[0]?.id ?? "", name: items[0]?.name ?? "", uom: items[0]?.uom ?? "PCS", qty: 1, unitPrice: 0 }]);
+  const [lines, setLines] = useState([{ itemId: items[0]?.id ?? "", name: items[0]?.name ?? "", uom: items[0]?.uom ?? "PCS", qty: 1, unitPrice: 0, poRef: "" }]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -18,7 +18,7 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
     const it = items.find((x) => String(x.id) === String(itemId));
     updateLine(i, { itemId, name: it?.name ?? "", uom: it?.uom ?? "PCS" });
   };
-  const addLine = () => setLines((ls) => [...ls, { itemId: items[0]?.id ?? "", name: items[0]?.name ?? "", uom: items[0]?.uom ?? "PCS", qty: 1, unitPrice: 0 }]);
+  const addLine = () => setLines((ls) => [...ls, { itemId: items[0]?.id ?? "", name: items[0]?.name ?? "", uom: items[0]?.uom ?? "PCS", qty: 1, unitPrice: 0, poRef: "" }]);
   const removeLine = (i) => setLines((ls) => ls.filter((_, idx) => idx !== i));
   const dpp = lines.reduce((sum, l) => sum + Number(l.qty || 0) * Number(l.unitPrice || 0), 0);
   const ppn = Math.round(dpp * 0.11);
@@ -38,6 +38,7 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
           uom: l.uom,
           qty: Number(l.qty),
           unitPrice: Number(l.unitPrice),
+          poRef: l.poRef || undefined,
         })),
       });
       onCreated();
@@ -65,8 +66,8 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
-          <Field label="No PO (opsional)">
-            <input value={poRef} onChange={(e) => setPoRef(e.target.value)} className={inputCls} />
+          <Field label="No PO default (opsional)">
+            <input value={poRef} onChange={(e) => setPoRef(e.target.value)} className={inputCls} placeholder="dipakai kalau baris tidak isi No PO sendiri" />
           </Field>
         </div>
 
@@ -77,6 +78,7 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
                 <th className="px-3 py-2">Barang</th>
                 <th className="px-3 py-2 w-24">Qty</th>
                 <th className="px-3 py-2 w-24">Unit</th>
+                <th className="px-3 py-2 w-32">No PO</th>
                 <th className="px-3 py-2 w-40">Harga Satuan</th>
                 <th className="px-3 py-2 w-32 text-right">Jumlah</th>
                 <th className="w-10"></th>
@@ -95,6 +97,9 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
                   </td>
                   <td className="px-3 py-2">
                     <input value={l.uom} onChange={(e) => updateLine(i, { uom: e.target.value })} className={inputCls} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input value={l.poRef} onChange={(e) => updateLine(i, { poRef: e.target.value })} className={inputCls} placeholder={poRef || "-"} />
                   </td>
                   <td className="px-3 py-2">
                     <input type="number" min="0" value={l.unitPrice} onChange={(e) => updateLine(i, { unitPrice: e.target.value })} className={inputCls} />
@@ -209,7 +214,7 @@ function InvoiceDetail({ id, onBack }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500">
-                  <th className="px-4 py-2">Part No</th><th className="px-4 py-2">Nama Barang</th>
+                  <th className="px-4 py-2">Part No</th><th className="px-4 py-2">No PO</th><th className="px-4 py-2">Nama Barang</th>
                   <th className="px-4 py-2 text-right">Qty</th><th className="px-4 py-2">Unit</th>
                   <th className="px-4 py-2 text-right">Harga</th><th className="px-4 py-2 text-right">Jumlah</th>
                 </tr>
@@ -218,6 +223,7 @@ function InvoiceDetail({ id, onBack }) {
                 {d.lines.map((it) => (
                   <tr key={it.id} className="border-b border-slate-100 last:border-0">
                     <td className="px-4 py-2.5 text-slate-500">{it.partNo || "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{it.poRef || d.poRef || "-"}</td>
                     <td className="px-4 py-2.5 text-slate-700">{it.name}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{it.qty}</td>
                     <td className="px-4 py-2.5 text-slate-500">{it.uom}</td>

@@ -84,17 +84,16 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
     company's address is deliberately left off the kop (NPWP still shows,
     since faktur pajak needs it) — only the recipient's address appears
     where relevant (e.g. Faktur Penjualan's "Kepada:").
-  - **Two signature styles.** Faktur Penjualan and BAST are legal documents
-    exchanged with an external party and get a wet-ink block. Everything
-    else (Slip Gaji, Surat Jalan, and any future Laporan Keuangan/Pajak
-    print-out) is issued electronically via `digitalSignatureBlock()` — it
-    prints the name of whoever triggered the action (`createdBy`, resolved
-    to the `User`) instead of a line to sign. New print templates should
-    default to the digital block unless the document is genuinely one that
-    needs ink/stamp. Within the wet-ink pair, `ttdBlock()` is for documents
-    both parties sign (BAST — proof of handover); Faktur Penjualan uses
-    `sellerSignatureBlock()` instead — an invoice is billing, not a receipt,
-    so there's no "Penerima" column for the buyer to sign.
+  - **Two signature styles.** Only BAST is a document both parties actually
+    hand-sign (proof of handover), so it's the one using `ttdBlock()` —
+    blank ink lines. Everything else is issued electronically and just
+    prints a name, no line: Slip Gaji/Surat Jalan (and any future Laporan
+    Keuangan/Pajak) use `digitalSignatureBlock()`, Faktur Penjualan uses
+    `preparerBlock()` — an invoice is billing, not a receipt, so it never
+    had anything for the buyer to sign either way. Both name-only blocks
+    resolve the acting user (`createdBy`) to their `displayName`. New
+    print templates should default to one of the no-line blocks unless
+    the document genuinely needs ink/stamp.
   - **Faktur Penjualan wording**: labeled "Subtotal" (not "DPP" — that's
     the formal e-Faktur Pajak term, this is a commercial invoice) plus a
     "PPh (dipotong pembeli)" line, matching how real Indonesian sales
@@ -103,6 +102,12 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
     or feed the journal engine, since withholding is the buyer's own
     bookkeeping. Line items' `partNo` auto-fills from the selected
     `Item.code` when not given explicitly (`SalesInvoicesService.create`).
+    The header info block is left-aligned (was oddly right-justified),
+    "No PO" moved to a per-line column (`SalesInvoiceLine.poRef`, falling
+    back to the invoice-level `poRef`) since one invoice can bill items
+    against different customer POs, and the bottom-left area shows the
+    issuing `Company.bankAccount` + payment terms (from `customer.termDays`)
+    instead of a blank notes area.
 
 ## What's implemented vs. still open
 

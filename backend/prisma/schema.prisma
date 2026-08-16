@@ -150,16 +150,18 @@ model Counter {
 // ---------------------------------------------------------------------------
 
 model Company {
-  id        Int       @id @default(autoincrement())
-  code      String    @unique
-  name      String
-  npwp      String?
-  address   String?
-  isDefault Boolean   @default(false) @map("is_default")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  createdBy Int?      @map("created_by")
-  deletedAt DateTime? @map("deleted_at")
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  name        String
+  npwp        String?
+  address     String?
+  // Ditampilkan di print-out Faktur Penjualan (pengganti area catatan/rekening).
+  bankAccount String?   @map("bank_account")
+  isDefault   Boolean   @default(false) @map("is_default")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   Int?      @map("created_by")
+  deletedAt   DateTime? @map("deleted_at")
 
   purchaseOrders   PurchaseOrder[]
   salesOrders      SalesOrder[]
@@ -487,6 +489,9 @@ model SalesInvoiceLine {
   uom            String
   unitPrice      BigInt       @map("unit_price")
   amount         BigInt
+  // Per baris, bukan cuma di header invoice — satu faktur bisa menagih barang
+  // dari beberapa PO pelanggan yang berbeda. Jatuh ke SalesInvoice.poRef kalau kosong.
+  poRef          String?      @map("po_ref")
 
   @@map("sales_invoice_lines")
 }

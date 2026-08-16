@@ -28,14 +28,12 @@ const BASE_CSS = `
   .totals tr.grand td { border-top: 1px solid #000000; font-weight: 700; padding-top: 6px; }
 
   /* Wet-signature block — only for documents that legally need ink + company
-     stamp (cap basah): Faktur Penjualan, BAST. Everything else is issued
-     electronically (see .digisign below), no blank line to sign. */
+     stamp (cap basah): BAST (both parties sign a handover). Everything else is
+     issued electronically, no blank line. */
   .ttd { margin-top: 48px; display: flex; justify-content: space-between; text-align: center; }
   .ttd .slot { width: 45%; }
   .ttd .label { color: #555555; margin-bottom: 56px; }
   .ttd .line { border-top: 1px solid #000000; padding-top: 4px; }
-  .ttd.single { justify-content: flex-end; }
-  .ttd.single .slot { width: 45%; }
 
   /* Digital-signature block — for documents that don't need ink: Slip Gaji,
      Surat Jalan, (future) Laporan Keuangan/Pajak. Shows the PIC's real name
@@ -45,6 +43,12 @@ const BASE_CSS = `
   .digisign .role { font-size: 10.5px; color: #555555; margin-bottom: 2px; }
   .digisign .name { font-weight: 700; font-size: 13px; }
   .digisign .note { margin-top: 4px; font-size: 9.5px; color: #777777; font-style: italic; }
+
+  /* Preparer block — Faktur Penjualan. No line at all: the name comes straight
+     from the account that created the invoice, nothing to hand-sign. */
+  .preparer { margin-top: 40px; text-align: right; }
+  .preparer .company { font-weight: 700; }
+  .preparer .name { margin-top: 2px; }
 
   .highlight { background: #f2f2f2; border: 1px solid #000000; border-radius: 2px; padding: 8px 12px; font-weight: 700; color: #000000; display: flex; justify-content: space-between; margin-top: 16px; }
 `;
@@ -77,12 +81,14 @@ export function ttdBlock(kiri: string, kanan: string): string {
   </div>`;
 }
 
-/** Single wet-ink block for the seller only — Faktur Penjualan. A "Penerima" (buyer
- * receipt) column doesn't belong on an invoice: that confirmation lives on the
- * Surat Jalan/BAST, not on billing paperwork. */
-export function sellerSignatureBlock(label: string): string {
-  return `<div class="ttd single">
-    <div class="slot"><div class="label">${label}</div><div class="line">( .................... )</div></div>
+/** Faktur Penjualan's closing block — company name + the name of whoever created
+ * the invoice (from the logged-in account), no signature line. An invoice is
+ * billing, not a receipt: there's nothing here for either side to hand-sign. */
+export function preparerBlock(salutation: string, companyName: string, preparedByName: string | null): string {
+  return `<div class="preparer">
+    <div>${salutation}</div>
+    <div class="company">${companyName}</div>
+    ${preparedByName ? `<div class="name">${preparedByName}</div>` : ""}
   </div>`;
 }
 
