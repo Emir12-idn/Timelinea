@@ -4,12 +4,12 @@ import { Role } from "@prisma/client";
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
   hrd_keuangan: "HRD",
-  pic_proyek: "PIC",
+  pic_proyek: "Project Manager",
   karyawan: "Staff",
 };
 
-/** e.g. displayName("Agus", "hrd_keuangan") -> "HRD Agus". Computed, never stored,
- * so it stays correct if the account's role changes later. */
+/** e.g. displayName("Abdul Manaf", "pic_proyek") -> "Project Manager Abdul Manaf".
+ * Computed, never stored, so it stays correct if the account's role changes later. */
 export function displayName(name: string, role: Role): string {
   return `${ROLE_LABEL[role]} ${name}`;
 }
