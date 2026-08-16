@@ -26,6 +26,15 @@ export class CashAdvancesController {
     return this.service.create(dto, user.employeeId);
   }
 
+  /** Tier 1 — atasan/PIC Proyek sign-off, before HRD's final decision. */
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin, Role.pic_proyek)
+  @Patch(":id/tier1-decision")
+  decideTier1(@Param("id", ParseIntPipe) id: number, @Body() dto: DecideCashAdvanceDto, @CurrentUser() user: AuthUser) {
+    return this.service.decideTier1(id, dto.decision, user.id);
+  }
+
+  /** Tier 2 (final) — HRD/Keuangan. Disburses cash and posts the journal on approval. */
   @UseGuards(RolesGuard)
   @Roles(Role.admin, Role.hrd_keuangan)
   @Patch(":id/decision")

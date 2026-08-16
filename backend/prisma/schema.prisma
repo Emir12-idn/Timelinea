@@ -87,8 +87,13 @@ enum AttendanceStatus {
   alpha
 }
 
+// Tiered per docs/DATA_DESIGN.md's "waiting on confirmation" note: pic_proyek
+// (atasan langsung) signs off first (tier1_approved), then hrd_keuangan gives
+// the final approval that actually disburses cash and posts the journal.
+// Either tier can reject, ending the flow.
 enum CashAdvanceStatus {
   pending
+  tier1_approved
   approved
   rejected
 }
@@ -744,6 +749,9 @@ model CashAdvance {
   amount     BigInt
   reason     String
   status     CashAdvanceStatus @default(pending)
+  // Tier 1 (pic_proyek/atasan) sign-off — required before HRD's final decision.
+  tier1By    Int?              @map("tier1_by")
+  // Final decision maker: whoever approved (HRD) or rejected (either tier).
   approvedBy Int?              @map("approved_by")
   remaining  BigInt
   createdAt  DateTime          @default(now()) @map("created_at")

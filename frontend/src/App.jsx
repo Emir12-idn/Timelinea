@@ -16,6 +16,7 @@ import BASTList from "./pages/BASTList";
 import Laporan from "./pages/Laporan";
 import SalesReturnList from "./pages/SalesReturnList";
 import PurchaseReturnList from "./pages/PurchaseReturnList";
+import Kasbon from "./pages/Kasbon";
 import { labelPath } from "./menu";
 
 function Shell() {
@@ -36,6 +37,7 @@ function Shell() {
     if (active === "laporan") return <Laporan />;
     if (active === "pj-retur") return <SalesReturnList />;
     if (active === "pb-retur") return <PurchaseReturnList />;
+    if (active === "ab-kasbon") return <Kasbon />;
     const { crumbs, title } = labelPath(active);
     return <Placeholder title={title} crumbs={crumbs} />;
   };

@@ -72,6 +72,15 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   items. Like the invoices, there's no partial-payment-style tracking —
   a return just posts its own dpp/ppn/total, it doesn't attempt to net
   against what's already been collected/paid on the original invoice.
+- **Kasbon is a two-tier approval** (`src/hr/cash-advances/`): `pending` ->
+  (`PATCH /:id/tier1-decision`, `pic_proyek`/`admin`) -> `tier1_approved` ->
+  (`PATCH /:id/decision`, `hrd_keuangan`/`admin`) -> `approved`/`rejected`.
+  Either tier can reject, which ends the flow immediately. The journal entry
+  (`JournalService.postCashAdvanceApproval` — debit Piutang Karyawan, credit
+  Kas) and `remaining` only get set on the *final* HRD approval — tier 1 is
+  just a sign-off, it doesn't touch cash or the ledger. `CashAdvance.tier1By`
+  records who gave that sign-off; `approvedBy` records whoever made the
+  final call either way (HRD approving, or either tier rejecting).
 - **Role-based access** (`src/common/guards/roles.guard.ts`) follows §6:
   `admin`, `hrd_keuangan`, `pic_proyek`, `karyawan`. Self-service endpoints
   (work reports, attendance, cash advances, payslips) scope results to the
@@ -154,8 +163,6 @@ assets/depreciation.
 
 Not built yet (see docs/DATA_DESIGN.md §8 antrean kerja for the source list):
 - Bank reconciliation / buku bank (only receipt & payment are modeled).
-- Tiered kasbon approval (spec left this "waiting on confirmation" — current
-  implementation is single-level HRD approval per the stated default).
 
 ## Deploying
 
