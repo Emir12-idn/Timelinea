@@ -1,9 +1,38 @@
 import { useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X, Printer } from "lucide-react";
 import { Card, PageHeader, Badge, Spinner, ErrorBanner, Field, inputCls, selectCls } from "../components/ui";
 import { useApi } from "../lib/useApi";
-import { api } from "../api/client";
+import { api, fetchPdfObjectUrl } from "../api/client";
 import { rupiah, dateID } from "../lib/format";
+
+function PrintPoButton({ id }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const openPdf = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const url = await fetchPdfObjectUrl(`/purchase-orders/${id}/print`);
+      window.open(url, "_blank");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={openPdf}
+        disabled={busy}
+        className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+      >
+        <Printer size={13} /> {busy ? "…" : "PDF"}
+      </button>
+      {error && <div className="max-w-[10rem] text-right text-[10px] text-rose-600">{error}</div>}
+    </div>
+  );
+}
 
 function NewPOForm({ suppliers, items, onClose, onCreated }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -159,6 +188,7 @@ export default function POList() {
                   <th className="px-4 py-3">Pemasok</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Nilai</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
@@ -171,11 +201,12 @@ export default function POList() {
                       <td className="px-4 py-3 text-slate-700">{r.supplier?.name}</td>
                       <td className="px-4 py-3"><Badge status={r.status} /></td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-700">{rupiah(nilai)}</td>
+                      <td className="px-4 py-3 text-right"><PrintPoButton id={r.id} /></td>
                     </tr>
                   );
                 })}
                 {(po.data || []).length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-400">Belum ada PO.</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">Belum ada PO.</td></tr>
                 )}
               </tbody>
             </table>

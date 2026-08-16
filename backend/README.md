@@ -75,7 +75,8 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   PDF via `puppeteer-core`, driving a system-installed Chromium rather than
   bundling one. `GET /api/sales-invoices/:id/print`,
   `/api/basts/:id/print`, `/api/delivery-orders/:id/print`,
-  `/api/payslips/:id/print` return `application/pdf` directly. Needs
+  `/api/payslips/:id/print`, `/api/purchase-orders/:id/print` return
+  `application/pdf` directly. Needs
   `PUPPETEER_EXECUTABLE_PATH` pointing at a real Chromium/Chrome — the
   Docker image installs one automatically (see Dockerfile); for local dev
   set it in `.env` (see `.env.example`).
@@ -87,8 +88,8 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   - **Two signature styles.** Only BAST is a document both parties actually
     hand-sign (proof of handover), so it's the one using `ttdBlock()` —
     blank ink lines. Everything else is issued electronically and just
-    prints a name, no line: Slip Gaji/Surat Jalan (and any future Laporan
-    Keuangan/Pajak) use `digitalSignatureBlock()`, Faktur Penjualan uses
+    prints a name, no line: Slip Gaji/Surat Jalan/Pesanan Pembelian use
+    `digitalSignatureBlock()`, Faktur Penjualan uses
     `preparerBlock()` — an invoice is billing, not a receipt, so it never
     had anything for the buyer to sign either way. Both name-only blocks
     resolve the acting user (`createdBy`) to their `displayName`. New
@@ -139,8 +140,6 @@ fixed assets/depreciation.
 Not built yet (see docs/DATA_DESIGN.md §8 antrean kerja for the source list):
 - Bank reconciliation / buku bank (only receipt & payment are modeled).
 - Purchase/sales retur (return) documents.
-- PDF print-out for PO (only Faktur Penjualan, Slip Gaji, and BAST are
-  wired up so far — same `src/printing/` pattern extends easily to PO).
 - Tiered kasbon approval (spec left this "waiting on confirmation" — current
   implementation is single-level HRD approval per the stated default).
 

@@ -3,6 +3,9 @@ import { PoStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
 import { lineAmount } from "../../common/money.util";
+import { PdfService } from "../../printing/pdf.service";
+import { purchaseOrderHtml } from "../../printing/templates/purchase-order.template";
+import { displayName } from "../../auth/role-label.util";
 import { CreatePurchaseOrderDto } from "./dto/create-purchase-order.dto";
 import { UpdatePurchaseOrderDto } from "./dto/update-purchase-order.dto";
 
@@ -11,6 +14,7 @@ export class PurchaseOrdersService {
   constructor(
     private prisma: PrismaService,
     private numbering: NumberingService,
+    private pdf: PdfService,
   ) {}
 
   findAll(status?: PoStatus) {
@@ -93,6 +97,20 @@ export class PurchaseOrdersService {
   async updateStatus(id: number, status: PoStatus) {
     await this.findOne(id);
     return this.prisma.purchaseOrder.update({ where: { id }, data: { status } });
+  }
+
+  async renderPdf(id: number): Promise<Buffer> {
+    const po = await this.findOne(id);
+    const issuer = po.createdBy ? await this.prisma.user.findUnique({ where: { id: po.createdBy } }) : null;
+    const html = purchaseOrderHtml({
+      no: po.no,
+      date: po.date,
+      note: po.note,
+      supplier: po.supplier,
+      lines: po.lines,
+      issuedByName: issuer ? displayName(issuer.name, issuer.role) : null,
+    });
+    return this.pdf.renderHtmlToPdf(html);
   }
 
   async remove(id: number) {

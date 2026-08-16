@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { Response } from "express";
 import { PoStatus } from "@prisma/client";
 import { PurchaseOrdersService } from "./purchase-orders.service";
 import { CreatePurchaseOrderDto } from "./dto/create-purchase-order.dto";
@@ -41,5 +42,12 @@ export class PurchaseOrdersController {
   @Delete(":id")
   remove(@Param("id", ParseIntPipe) id: number) {
     return this.service.remove(id);
+  }
+
+  @Get(":id/print")
+  async print(@Param("id", ParseIntPipe) id: number, @Res() res: Response) {
+    const pdf = await this.service.renderPdf(id);
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="po-${id}.pdf"` });
+    res.send(pdf);
   }
 }
