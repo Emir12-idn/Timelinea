@@ -1,19 +1,28 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
+import { PdfService } from "../../printing/pdf.service";
+import { suratJalanHtml } from "../../printing/templates/surat-jalan.template";
 import { CreateDeliveryOrderDto } from "./dto/create-delivery-order.dto";
+
+const DELIVERY_ORDER_DETAIL_INCLUDE = {
+  so: { include: { customer: true } },
+  project: { include: { customer: true } },
+  lines: { include: { item: true } },
+} as const;
 
 @Injectable()
 export class DeliveryOrdersService {
   constructor(
     private prisma: PrismaService,
     private numbering: NumberingService,
+    private pdf: PdfService,
   ) {}
 
   findAll() {
     return this.prisma.deliveryOrder.findMany({
       where: { deletedAt: null },
-      include: { so: { include: { customer: true } }, project: true, lines: { include: { item: true } } },
+      include: DELIVERY_ORDER_DETAIL_INCLUDE,
       orderBy: { date: "desc" },
     });
   }
@@ -21,7 +30,7 @@ export class DeliveryOrdersService {
   async findOne(id: number) {
     const deliveryOrder = await this.prisma.deliveryOrder.findFirst({
       where: { id, deletedAt: null },
-      include: { so: { include: { customer: true } }, project: true, lines: { include: { item: true } } },
+      include: DELIVERY_ORDER_DETAIL_INCLUDE,
     });
     if (!deliveryOrder) throw new NotFoundException("Surat Jalan tidak ditemukan");
     return deliveryOrder;
@@ -67,5 +76,20 @@ export class DeliveryOrdersService {
 
       return deliveryOrder;
     });
+  }
+
+  async renderPdf(id: number): Promise<Buffer> {
+    const deliveryOrder = await this.findOne(id);
+    const issuer = deliveryOrder.createdBy
+      ? await this.prisma.user.findUnique({ where: { id: deliveryOrder.createdBy } })
+      : null;
+    const html = suratJalanHtml({
+      no: deliveryOrder.no,
+      date: deliveryOrder.date,
+      customerName: deliveryOrder.so?.customer.name ?? deliveryOrder.project?.customer.name ?? "-",
+      lines: deliveryOrder.lines,
+      issuedByName: issuer?.name ?? null,
+    });
+    return this.pdf.renderHtmlToPdf(html);
   }
 }

@@ -108,6 +108,7 @@ export class PayslipsService {
           loanInstallment,
           deductionTotal,
           netPay,
+          createdBy,
         },
       });
 
@@ -135,7 +136,7 @@ export class PayslipsService {
 
   async renderPdf(id: number): Promise<Buffer> {
     const payslip = await this.findOne(id);
-    const [kasbonAgg, loanAgg] = await Promise.all([
+    const [kasbonAgg, loanAgg, issuer] = await Promise.all([
       this.prisma.cashAdvance.aggregate({
         where: { employeeId: payslip.employeeId, status: "approved", remaining: { gt: 0 } },
         _sum: { remaining: true },
@@ -144,11 +145,13 @@ export class PayslipsService {
         where: { employeeId: payslip.employeeId, remaining: { gt: 0 } },
         _sum: { remaining: true },
       }),
+      payslip.createdBy ? this.prisma.user.findUnique({ where: { id: payslip.createdBy } }) : null,
     ]);
     const html = slipGajiHtml({
       ...payslip,
       sisaKasbon: kasbonAgg._sum.remaining ?? 0n,
       sisaHutang: loanAgg._sum.remaining ?? 0n,
+      issuedByName: issuer?.name ?? null,
     });
     return this.pdf.renderHtmlToPdf(html);
   }

@@ -692,6 +692,7 @@ model Payslip {
   deductionTotal    BigInt   @map("deduction_total")
   netPay            BigInt   @map("net_pay")
   createdAt         DateTime @default(now()) @map("created_at")
+  createdBy         Int?     @map("created_by")
 
   @@unique([employeeId, period])
   @@map("payslips")

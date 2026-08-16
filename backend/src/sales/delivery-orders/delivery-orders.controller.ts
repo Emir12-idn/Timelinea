@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Res, UseGuards } from "@nestjs/common";
+import { Response } from "express";
 import { DeliveryOrdersService } from "./delivery-orders.service";
 import { CreateDeliveryOrderDto } from "./dto/create-delivery-order.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -23,5 +24,12 @@ export class DeliveryOrdersController {
   @Post()
   create(@Body() dto: CreateDeliveryOrderDto, @CurrentUser() user: AuthUser) {
     return this.service.create(dto, user.id);
+  }
+
+  @Get(":id/print")
+  async print(@Param("id", ParseIntPipe) id: number, @Res() res: Response) {
+    const pdf = await this.service.renderPdf(id);
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="surat-jalan-${id}.pdf"` });
+    res.send(pdf);
   }
 }

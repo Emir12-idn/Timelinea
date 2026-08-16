@@ -60,10 +60,24 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   templates, simplified further per a reference vendor-portal invoice) to
   PDF via `puppeteer-core`, driving a system-installed Chromium rather than
   bundling one. `GET /api/sales-invoices/:id/print`,
-  `/api/basts/:id/print`, `/api/payslips/:id/print` return
-  `application/pdf` directly. Needs `PUPPETEER_EXECUTABLE_PATH` pointing at
-  a real Chromium/Chrome — the Docker image installs one automatically (see
-  Dockerfile); for local dev set it in `.env` (see `.env.example`).
+  `/api/basts/:id/print`, `/api/delivery-orders/:id/print`,
+  `/api/payslips/:id/print` return `application/pdf` directly. Needs
+  `PUPPETEER_EXECUTABLE_PATH` pointing at a real Chromium/Chrome — the
+  Docker image installs one automatically (see Dockerfile); for local dev
+  set it in `.env` (see `.env.example`).
+  - **Strictly monochrome** (`layout.util.ts`'s `BASE_CSS`) — no navy/gold
+    brand colors on printed documents, black/white/gray only. The issuing
+    company's address is deliberately left off the kop (NPWP still shows,
+    since faktur pajak needs it) — only the recipient's address appears
+    where relevant (e.g. Faktur Penjualan's "Kepada:").
+  - **Two signature styles.** Faktur Penjualan and BAST are legal documents
+    exchanged with an external party and get `ttdBlock()` — blank lines for
+    wet ink + company stamp. Everything else (Slip Gaji, Surat Jalan, and
+    any future Laporan Keuangan/Pajak print-out) is issued electronically
+    via `digitalSignatureBlock()` — it prints the name of whoever
+    triggered the action (`createdBy`, resolved to the `User`) instead of
+    a line to sign. New print templates should default to the digital
+    block unless the document is genuinely one that needs ink/stamp.
 
 ## What's implemented vs. still open
 

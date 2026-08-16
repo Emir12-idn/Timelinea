@@ -33,9 +33,9 @@ export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
     <table style="margin-bottom:14px;">
       <tr>
         <td style="width:55%">
-          <div style="color:#64748b">Kepada:</div>
+          <div style="color:#555555">Kepada:</div>
           <div style="font-weight:600">${invoice.customer.name}</div>
-          <div style="color:#64748b">${invoice.customer.address ?? ""}</div>
+          <div style="color:#555555">${invoice.customer.address ?? ""}</div>
         </td>
         <td style="text-align:right">
           <div>No. Faktur : <b>${invoice.no}</b></div>

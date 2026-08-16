@@ -25,7 +25,7 @@ export function bastHtml(bast: BastForPrint): string {
 
   const body = `
     <div class="doc-title" style="margin-bottom:2px;">BERITA ACARA SERAH TERIMA</div>
-    <div style="text-align:center;color:#64748b;font-size:11px;margin-bottom:16px;">No. ${bast.no} &middot; ${formatDate(bast.date)}</div>
+    <div style="text-align:center;color:#555555;font-size:11px;margin-bottom:16px;">No. ${bast.no} &middot; ${formatDate(bast.date)}</div>
     <p>Pada hari ini, telah dilakukan serah terima barang/pekerjaan${bast.poRef ? ` sesuai Pesanan Pembelian (PO) <b>${bast.poRef}</b>` : ""} dengan rincian sebagai berikut:</p>
     <table style="margin:12px 0;font-size:12.5px;">
       <tr>
