@@ -81,6 +81,22 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   just a sign-off, it doesn't touch cash or the ledger. `CashAdvance.tier1By`
   records who gave that sign-off; `approvedBy` records whoever made the
   final call either way (HRD approving, or either tier rejecting).
+- **Bank reconciliation** (`src/cash/bank-reconciliation/`) is a pure
+  matching tool, not a posting one — `BankStatementLine` rows are entered
+  manually (no local bank has an API feed to pull from) and never touch the
+  journal; `CashTransaction` already posted when it was created. `POST
+  /api/bank-statement-lines` adds one row (`amount` signed: positive =
+  masuk, negative = keluar, same convention as a real rekening koran).
+  `PATCH /:id/match` links it 1:1 to an existing `CashTransaction`
+  (`BankStatementLine.cashTransactionId` is `@unique`) after checking the
+  accounts match and the signed amounts are exactly equal (receipt = +,
+  payment = −) — no partial/fuzzy matching, same "must balance exactly"
+  philosophy as the journal engine. `GET /bank-statement-lines/summary?accountId`
+  returns the book balance (same debit-normal ledger math as Laporan's Buku
+  Besar) plus both worklists a real reconciliation needs: `CashTransaction`s
+  with no matching statement line yet ("dicatat sistem, belum di bank") and
+  statement lines with no matching transaction ("di bank, belum dicatat
+  sistem") — e.g. bank admin fees nobody's booked yet.
 - **Role-based access** (`src/common/guards/roles.guard.ts`) follows §6:
   `admin`, `hrd_keuangan`, `pic_proyek`, `karyawan`. Self-service endpoints
   (work reports, attendance, cash advances, payslips) scope results to the
@@ -157,12 +173,13 @@ Penjualan, Karyawan, Absensi, Penggajian, BAST, Buku Besar/Jurnal, Daftar
 Akun, Laporan Keuangan (laba rugi/neraca/buku besar/aging) — plus
 Pembelian/Penjualan supporting docs (delivery order, sales order — see the
 "No GRN" note above for why goods receipt isn't a separate step), retur
-pembelian/penjualan, Kas & Bank (receipt/payment), stock moves, project
-tasks/work reports, cash advances, employee loans, and fixed
-assets/depreciation.
+pembelian/penjualan, Kas & Bank (receipt/payment + bank reconciliation),
+stock moves, project tasks/work reports, tiered kasbon approval, employee
+loans, and fixed assets/depreciation.
 
-Not built yet (see docs/DATA_DESIGN.md §8 antrean kerja for the source list):
-- Bank reconciliation / buku bank (only receipt & payment are modeled).
+Every item from docs/DATA_DESIGN.md §8's antrean kerja list is now built —
+this list will grow again as new requests come in, but there's currently
+no known backlog against the original spec.
 
 ## Deploying
 

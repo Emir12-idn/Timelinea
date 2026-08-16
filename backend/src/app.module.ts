@@ -21,6 +21,7 @@ import { DeliveryOrdersModule } from "./sales/delivery-orders/delivery-orders.mo
 import { SalesInvoicesModule } from "./sales/sales-invoices/sales-invoices.module";
 import { SalesReturnsModule } from "./sales/sales-returns/sales-returns.module";
 import { CashTransactionsModule } from "./cash/cash-transactions.module";
+import { BankReconciliationModule } from "./cash/bank-reconciliation/bank-reconciliation.module";
 import { StockMovesModule } from "./inventory/stock-moves.module";
 import { ProjectTasksModule } from "./projectmgmt/project-tasks/project-tasks.module";
 import { WorkReportsModule } from "./projectmgmt/work-reports/work-reports.module";
@@ -57,6 +58,7 @@ import { ReportsModule } from "./reports/reports.module";
     SalesInvoicesModule,
     SalesReturnsModule,
     CashTransactionsModule,
+    BankReconciliationModule,
     StockMovesModule,
     ProjectTasksModule,
     WorkReportsModule,

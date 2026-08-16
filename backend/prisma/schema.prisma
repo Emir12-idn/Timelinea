@@ -175,8 +175,9 @@ model Company {
   journalEntries   JournalEntry[]
   cashTransactions CashTransaction[]
   fixedAssets      FixedAsset[]
-  purchaseReturns  PurchaseReturn[]
-  salesReturns     SalesReturn[]
+  purchaseReturns    PurchaseReturn[]
+  salesReturns       SalesReturn[]
+  bankStatementLines BankStatementLine[]
 
   @@map("companies")
 }
@@ -811,8 +812,9 @@ model Account {
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 
-  journalLines     JournalLine[]
-  cashTransactions CashTransaction[]
+  journalLines       JournalLine[]
+  cashTransactions   CashTransaction[]
+  bankStatementLines BankStatementLine[]
 
   @@map("accounts")
 }
@@ -893,5 +895,30 @@ model CashTransaction {
   createdAt         DateTime            @default(now()) @map("created_at")
   createdBy         Int?                @map("created_by")
 
+  bankStatementLine BankStatementLine?
+
   @@map("cash_transactions")
+}
+
+// Rekonsiliasi bank: baris mutasi rekening koran, dientri manual (bank lokal
+// belum ada API feed). Tidak menyentuh jurnal — CashTransaction sudah posting
+// saat dibuat, ini murni alat pencocokan "yang sistem catat" vs "yang bank
+// catat". amount positif = uang masuk, negatif = uang keluar, mengikuti tanda
+// di rekening koran aslinya.
+model BankStatementLine {
+  id                Int              @id @default(autoincrement())
+  accountId         Int              @map("account_id")
+  account           Account          @relation(fields: [accountId], references: [id])
+  date              DateTime
+  description       String
+  amount            BigInt
+  companyId         Int?             @map("company_id")
+  company           Company?         @relation(fields: [companyId], references: [id])
+  cashTransactionId Int?             @unique @map("cash_transaction_id")
+  cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id])
+  createdAt         DateTime         @default(now()) @map("created_at")
+  createdBy         Int?             @map("created_by")
+
+  @@index([accountId])
+  @@map("bank_statement_lines")
 }
