@@ -13,6 +13,7 @@ import Penggajian from "./pages/Penggajian";
 import DaftarAkun from "./pages/DaftarAkun";
 import BuktiJurnal from "./pages/BuktiJurnal";
 import BASTList from "./pages/BASTList";
+import Laporan from "./pages/Laporan";
 import { labelPath } from "./menu";
 
 function Shell() {
@@ -30,6 +31,7 @@ function Shell() {
     if (active === "bb-akun") return <DaftarAkun />;
     if (active === "bb-jurnal") return <BuktiJurnal />;
     if (active === "pr-bast") return <BASTList />;
+    if (active === "laporan") return <Laporan />;
     const { crumbs, title } = labelPath(active);
     return <Placeholder title={title} crumbs={crumbs} />;
   };

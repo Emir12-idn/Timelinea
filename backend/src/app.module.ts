@@ -29,6 +29,7 @@ import { CashAdvancesModule } from "./hr/cash-advances/cash-advances.module";
 import { EmployeeLoansModule } from "./hr/employee-loans/employee-loans.module";
 import { PayslipsModule } from "./hr/payslips/payslips.module";
 import { FixedAssetsModule } from "./fixed-assets/fixed-assets.module";
+import { ReportsModule } from "./reports/reports.module";
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { FixedAssetsModule } from "./fixed-assets/fixed-assets.module";
     EmployeeLoansModule,
     PayslipsModule,
     FixedAssetsModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

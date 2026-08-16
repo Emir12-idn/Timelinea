@@ -108,20 +108,35 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
     against different customer POs, and the bottom-left area shows the
     issuing `Company.bankAccount` + payment terms (from `customer.termDays`)
     instead of a blank notes area.
+- **Laporan** (`src/reports/`) computes everything on read, straight from
+  `journal_lines` + invoice status — no separate reporting tables to keep in
+  sync. `GET /api/reports/laba-rugi?from&to` sums `pendapatan`/`beban`
+  accounts in the period; `/neraca?asOf` sums `aset`/`kewajiban`/`ekuitas`
+  cumulatively up to a date and, since there's no period-close mechanism,
+  plugs the running (revenue − expense) total in as a synthetic "Laba (Rugi)
+  Ditahan" equity line so the sheet always balances; `/buku-besar/:accountCode?from&to`
+  is a per-account ledger with an opening balance and a running balance per
+  line (sign flips on `debitNormal` — `aset`/`beban` are debit-normal,
+  everything else credit-normal); `/aging?type=piutang|hutang&asOf` buckets
+  open `SalesInvoice`s (`status` in `sent`/`accepted`) or `PurchaseInvoice`s
+  (`status: open`) by days past their due date (`date + partner.termDays`,
+  or `PurchaseInvoice.dueDate` when set). Since a `CashTransaction` receipt/
+  payment always fully settles one invoice (no partial-payment allocation —
+  see `CashTransactionsService.create`), "outstanding" is just "not yet
+  `paid`", no running-balance-per-invoice math needed.
 
 ## What's implemented vs. still open
 
 Full CRUD + the journal engine is in for every module referenced by the
 existing frontend prototype (`EmeraldERP.jsx`): PO, Faktur Penjualan,
-Karyawan, Absensi, Penggajian, BAST, Buku Besar/Jurnal, Daftar Akun — plus
-Pembelian/Penjualan supporting docs (delivery order, sales order — see the
-"No GRN" note above for why goods receipt isn't a separate step), Kas &
-Bank (receipt/payment), stock moves, project tasks/work reports, cash
-advances, employee loans, and fixed assets/depreciation.
+Karyawan, Absensi, Penggajian, BAST, Buku Besar/Jurnal, Daftar Akun, Laporan
+Keuangan (laba rugi/neraca/buku besar/aging) — plus Pembelian/Penjualan
+supporting docs (delivery order, sales order — see the "No GRN" note above
+for why goods receipt isn't a separate step), Kas & Bank (receipt/payment),
+stock moves, project tasks/work reports, cash advances, employee loans, and
+fixed assets/depreciation.
 
 Not built yet (see docs/DATA_DESIGN.md §8 antrean kerja for the source list):
-- Laporan module (laba rugi / neraca / aging reports) — the data is all in
-  `journal_lines` and `payslips`/invoices, this is a reporting layer on top.
 - Bank reconciliation / buku bank (only receipt & payment are modeled).
 - Purchase/sales retur (return) documents.
 - PDF print-out for PO (only Faktur Penjualan, Slip Gaji, and BAST are
