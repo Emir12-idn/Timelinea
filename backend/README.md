@@ -42,6 +42,13 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   didn't list — called out in the seed file and `coa-codes.ts`.
 - **Soft delete**: master data and most documents use `deleted_at` instead
   of a real `DELETE`; every `findAll`/`findOne` filters it out.
+- **Prisma errors are never raw 500s.** `src/common/filters/prisma-exception.filter.ts`
+  is registered globally (`main.ts`) and turns unique-constraint hits (e.g.
+  duplicate NIK on `POST /employees`), missing-record updates, and bad
+  foreign keys into proper 409/404/400 responses with a readable message —
+  covers every module, not just the ones with an explicit pre-check
+  (`UsersService` still pre-checks email itself for a more specific message,
+  the filter is the safety net everywhere else).
 - **No GRN.** The data design's §3 originally modeled a `goods_receipt`
   step between PO and Faktur Pembelian, but Emerald doesn't issue GRNs
   itself — that's the principal/customer's document on the sales side

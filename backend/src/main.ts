@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
+import { PrismaExceptionFilter } from "./common/filters/prisma-exception.filter";
 
 // BigInt is used for every money column (integer rupiah). JSON.stringify can't
 // serialize BigInt by default, so every amount would crash the response —
@@ -19,6 +20,7 @@ async function bootstrap() {
 
   app.use(helmet());
   app.setGlobalPrefix("api");
+  app.useGlobalFilters(new PrismaExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
