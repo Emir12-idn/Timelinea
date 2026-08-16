@@ -1,0 +1,25 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+body {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .printable,
+  .printable * {
+    visibility: visible !important;
+  }
+  .printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

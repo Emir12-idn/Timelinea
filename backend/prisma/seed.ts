@@ -66,9 +66,19 @@ async function main() {
     create: { code: "SUPP-001", name: "PT Baja Utama Nusantara", type: "supplier", termDays: 14 },
     update: {},
   });
-  await prisma.itemGroup.upsert({
+  const itemGroup = await prisma.itemGroup.upsert({
     where: { code: "GRP-UMUM" },
     create: { code: "GRP-UMUM", name: "Umum" },
+    update: {},
+  });
+  await prisma.item.upsert({
+    where: { code: "ITM-001" },
+    create: { code: "ITM-001", name: "Baut M12", uom: "PCS", type: "stock", groupId: itemGroup.id },
+    update: {},
+  });
+  await prisma.item.upsert({
+    where: { code: "ITM-002" },
+    create: { code: "ITM-002", name: "Jasa Instalasi", uom: "LS", type: "service", groupId: itemGroup.id },
     update: {},
   });
 

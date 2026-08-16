@@ -51,22 +51,24 @@ Harus balas JSON berisi `accessToken`.
 
 ## 4. Frontend
 
-Compose ini baru menjalankan **backend**. Untuk frontend (`EmeraldERP.jsx` yang
-sudah ada, sebagai starting point React/Vite):
+Compose ini baru menjalankan **backend**. Frontend (`frontend/`, React +
+Vite, sudah tersambung ke API — lihat `frontend/README.md`) di-build lalu
+disajikan statis lewat Caddy yang sama:
 
-1. `npm create vite@latest frontend -- --template react` lalu pindahkan komponen
-   dari prototipe ke dalamnya, ganti data contoh dengan `fetch`/`axios` ke
-   `https://DOMAIN_KAMU/api/...`.
-2. `npm run build` menghasilkan folder `dist/`.
-3. Taruh isi `dist/` di server (mis. `./frontend-dist` di repo ini), lalu ganti
-   blok `respond` di `Caddyfile` dengan:
-   ```
-   root * /srv
-   file_server
-   try_files {path} /index.html
-   ```
-   dan tambahkan volume `./frontend-dist:/srv:ro` ke service `caddy` di
-   `docker-compose.yml`.
+```bash
+cd frontend
+echo "VITE_API_URL=https://DOMAIN_KAMU/api" > .env
+npm install && npm run build   # hasil di frontend/dist/
+```
+
+Lalu ganti blok `respond` di `Caddyfile` (root repo) dengan:
+```
+root * /srv
+file_server
+try_files {path} /index.html
+```
+dan tambahkan volume `../frontend/dist:/srv:ro` ke service `caddy` di
+`docker-compose.yml`, lalu `docker compose up -d caddy`.
 
 ## 5. Update setelah ada perubahan kode
 
