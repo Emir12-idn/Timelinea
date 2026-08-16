@@ -109,6 +109,31 @@ export class JournalService {
     );
   }
 
+  // ---- Rule: Retur Penjualan -> Debit Penjualan (dpp), PPN Keluaran (ppn) | Kredit Piutang Usaha (total)
+  postSalesReturn(
+    ret: { id: number; no: string; date: Date; dpp: bigint; ppn: bigint; total: bigint; companyId: number | null },
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    return this.postEntry(
+      {
+        date: ret.date,
+        refType: "sales_return",
+        refId: ret.id,
+        refNo: ret.no,
+        type: "Retur Penjualan",
+        companyId: ret.companyId,
+        createdBy,
+        lines: [
+          { accountCode: COA_CODE.PENJUALAN, debit: ret.dpp },
+          { accountCode: COA_CODE.PPN_KELUARAN, debit: ret.ppn },
+          { accountCode: COA_CODE.PIUTANG_USAHA, credit: ret.total },
+        ],
+      },
+      db,
+    );
+  }
+
   // ---- Rule: Penerimaan dari pelanggan -> Debit Bank/Kas (total) | Kredit Piutang Usaha (total)
   postCustomerReceipt(
     receipt: { id: number; no: string; date: Date; amount: bigint; companyId: number | null },
@@ -154,6 +179,32 @@ export class JournalService {
           { accountCode: debitAccountCode, debit: invoice.dpp },
           { accountCode: COA_CODE.PPN_MASUKAN, debit: invoice.ppn },
           { accountCode: COA_CODE.UTANG_USAHA, credit: invoice.total },
+        ],
+      },
+      db,
+    );
+  }
+
+  // ---- Rule: Retur Pembelian -> Debit Utang Usaha (total) | Kredit Persediaan/HPP (dpp), PPN Masukan (ppn)
+  postPurchaseReturn(
+    ret: { id: number; no: string; date: Date; dpp: bigint; ppn: bigint; total: bigint; companyId: number | null },
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+    creditAccountCode: string = COA_CODE.PERSEDIAAN,
+  ) {
+    return this.postEntry(
+      {
+        date: ret.date,
+        refType: "purchase_return",
+        refId: ret.id,
+        refNo: ret.no,
+        type: "Retur Pembelian",
+        companyId: ret.companyId,
+        createdBy,
+        lines: [
+          { accountCode: COA_CODE.UTANG_USAHA, debit: ret.total },
+          { accountCode: creditAccountCode, credit: ret.dpp },
+          { accountCode: COA_CODE.PPN_MASUKAN, credit: ret.ppn },
         ],
       },
       db,

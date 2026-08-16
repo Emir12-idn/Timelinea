@@ -14,6 +14,8 @@ import DaftarAkun from "./pages/DaftarAkun";
 import BuktiJurnal from "./pages/BuktiJurnal";
 import BASTList from "./pages/BASTList";
 import Laporan from "./pages/Laporan";
+import SalesReturnList from "./pages/SalesReturnList";
+import PurchaseReturnList from "./pages/PurchaseReturnList";
 import { labelPath } from "./menu";
 
 function Shell() {
@@ -32,6 +34,8 @@ function Shell() {
     if (active === "bb-jurnal") return <BuktiJurnal />;
     if (active === "pr-bast") return <BASTList />;
     if (active === "laporan") return <Laporan />;
+    if (active === "pj-retur") return <SalesReturnList />;
+    if (active === "pb-retur") return <PurchaseReturnList />;
     const { crumbs, title } = labelPath(active);
     return <Placeholder title={title} crumbs={crumbs} />;
   };

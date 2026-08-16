@@ -15,9 +15,11 @@ import { ProjectsModule } from "./master/projects/projects.module";
 import { DepartmentsModule } from "./master/departments/departments.module";
 import { PurchaseOrdersModule } from "./purchasing/purchase-orders/purchase-orders.module";
 import { PurchaseInvoicesModule } from "./purchasing/purchase-invoices/purchase-invoices.module";
+import { PurchaseReturnsModule } from "./purchasing/purchase-returns/purchase-returns.module";
 import { SalesOrdersModule } from "./sales/sales-orders/sales-orders.module";
 import { DeliveryOrdersModule } from "./sales/delivery-orders/delivery-orders.module";
 import { SalesInvoicesModule } from "./sales/sales-invoices/sales-invoices.module";
+import { SalesReturnsModule } from "./sales/sales-returns/sales-returns.module";
 import { CashTransactionsModule } from "./cash/cash-transactions.module";
 import { StockMovesModule } from "./inventory/stock-moves.module";
 import { ProjectTasksModule } from "./projectmgmt/project-tasks/project-tasks.module";
@@ -49,9 +51,11 @@ import { ReportsModule } from "./reports/reports.module";
     DepartmentsModule,
     PurchaseOrdersModule,
     PurchaseInvoicesModule,
+    PurchaseReturnsModule,
     SalesOrdersModule,
     DeliveryOrdersModule,
     SalesInvoicesModule,
+    SalesReturnsModule,
     CashTransactionsModule,
     StockMovesModule,
     ProjectTasksModule,

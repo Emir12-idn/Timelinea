@@ -58,6 +58,20 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
   PO's lines, marking the PO `received`. `PurchaseOrderLine` no longer
   has a receipt-quantity concept — the invoice is trusted for the full PO
   line qty.
+- **Retur** (`src/sales/sales-returns/`, `src/purchasing/purchase-returns/`)
+  are standalone documents referencing an existing `SalesInvoice`/
+  `PurchaseInvoice` — they don't mutate the original invoice (audit trail
+  stays intact), just post a reversing entry and stock move.
+  `JournalService.postSalesReturn`/`postPurchaseReturn` mirror the invoice
+  rules exactly in reverse (sales return: debit `Penjualan`+`PPN Keluaran`,
+  credit `Piutang Usaha`; purchase return: debit `Utang Usaha`, credit
+  `Persediaan`/`HPP`+`PPN Masukan`, picking the same stock-vs-service credit
+  account the original purchase invoice used). Stock moves flip the same
+  way — `qtyIn` for a sales return (goods come back), `qtyOut` for a
+  purchase return (goods go back to the supplier), and only for `stock`-type
+  items. Like the invoices, there's no partial-payment-style tracking —
+  a return just posts its own dpp/ppn/total, it doesn't attempt to net
+  against what's already been collected/paid on the original invoice.
 - **Role-based access** (`src/common/guards/roles.guard.ts`) follows §6:
   `admin`, `hrd_keuangan`, `pic_proyek`, `karyawan`. Self-service endpoints
   (work reports, attendance, cash advances, payslips) scope results to the
@@ -129,17 +143,17 @@ API is served under `http://localhost:3000/api`. Login with the seeded admin
 ## What's implemented vs. still open
 
 Full CRUD + the journal engine is in for every module referenced by the
-existing frontend prototype (`EmeraldERP.jsx`): PO, Faktur Penjualan,
-Karyawan, Absensi, Penggajian, BAST, Buku Besar/Jurnal, Daftar Akun, Laporan
-Keuangan (laba rugi/neraca/buku besar/aging) — plus Pembelian/Penjualan
-supporting docs (delivery order, sales order — see the "No GRN" note above
-for why goods receipt isn't a separate step), Kas & Bank (receipt/payment),
-stock moves, project tasks/work reports, cash advances, employee loans, and
-fixed assets/depreciation.
+existing frontend prototype (`EmeraldERP.jsx`): PO (+ print), Faktur
+Penjualan, Karyawan, Absensi, Penggajian, BAST, Buku Besar/Jurnal, Daftar
+Akun, Laporan Keuangan (laba rugi/neraca/buku besar/aging) — plus
+Pembelian/Penjualan supporting docs (delivery order, sales order — see the
+"No GRN" note above for why goods receipt isn't a separate step), retur
+pembelian/penjualan, Kas & Bank (receipt/payment), stock moves, project
+tasks/work reports, cash advances, employee loans, and fixed
+assets/depreciation.
 
 Not built yet (see docs/DATA_DESIGN.md §8 antrean kerja for the source list):
 - Bank reconciliation / buku bank (only receipt & payment are modeled).
-- Purchase/sales retur (return) documents.
 - Tiered kasbon approval (spec left this "waiting on confirmation" — current
   implementation is single-level HRD approval per the stated default).
 

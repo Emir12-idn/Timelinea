@@ -170,6 +170,8 @@ model Company {
   journalEntries   JournalEntry[]
   cashTransactions CashTransaction[]
   fixedAssets      FixedAsset[]
+  purchaseReturns  PurchaseReturn[]
+  salesReturns     SalesReturn[]
 
   @@map("companies")
 }
@@ -255,12 +257,14 @@ model Item {
   createdBy Int?       @map("created_by")
   deletedAt DateTime?  @map("deleted_at")
 
-  purchaseOrderLines PurchaseOrderLine[]
-  salesOrderLines    SalesOrderLine[]
-  deliveryOrderLines DeliveryOrderLine[]
-  salesInvoiceLines  SalesInvoiceLine[]
-  bastLines          BastLine[]
-  stockMoves         StockMove[]
+  purchaseOrderLines   PurchaseOrderLine[]
+  salesOrderLines      SalesOrderLine[]
+  deliveryOrderLines   DeliveryOrderLine[]
+  salesInvoiceLines    SalesInvoiceLine[]
+  bastLines            BastLine[]
+  stockMoves           StockMove[]
+  purchaseReturnLines  PurchaseReturnLine[]
+  salesReturnLines     SalesReturnLine[]
 
   @@map("items")
 }
@@ -368,8 +372,46 @@ model PurchaseInvoice {
   deletedAt  DateTime?             @map("deleted_at")
 
   cashTransactions CashTransaction[]
+  returns          PurchaseReturn[]
 
   @@map("purchase_invoices")
+}
+
+// Retur pembelian: barang yang sudah masuk lewat Faktur Pembelian dikembalikan ke
+// pemasok. Jurnalnya kebalikan dari faktur pembelian (kredit Persediaan/HPP + PPN
+// Masukan, debit Utang Usaha) dan stoknya keluar lagi (stock_move qtyOut).
+model PurchaseReturn {
+  id                Int              @id @default(autoincrement())
+  no                String           @unique
+  date              DateTime
+  purchaseInvoiceId Int              @map("purchase_invoice_id")
+  purchaseInvoice   PurchaseInvoice  @relation(fields: [purchaseInvoiceId], references: [id])
+  companyId         Int?             @map("company_id")
+  company           Company?         @relation(fields: [companyId], references: [id])
+  reason            String?
+  dpp               BigInt
+  ppn               BigInt
+  total             BigInt
+  createdAt         DateTime         @default(now()) @map("created_at")
+  createdBy         Int?             @map("created_by")
+  deletedAt         DateTime?        @map("deleted_at")
+
+  lines PurchaseReturnLine[]
+
+  @@map("purchase_returns")
+}
+
+model PurchaseReturnLine {
+  id        Int            @id @default(autoincrement())
+  returnId  Int            @map("return_id")
+  return    PurchaseReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  itemId    Int            @map("item_id")
+  item      Item           @relation(fields: [itemId], references: [id])
+  qty       Decimal        @db.Decimal(14, 3)
+  unitPrice BigInt         @map("unit_price")
+  amount    BigInt
+
+  @@map("purchase_return_lines")
 }
 
 // ---------------------------------------------------------------------------
@@ -472,9 +514,47 @@ model SalesInvoice {
   logs             DocumentLog[]
   basts            Bast[]
   cashTransactions CashTransaction[]
+  returns          SalesReturn[]
 
   @@index([projectId])
   @@map("sales_invoices")
+}
+
+// Retur penjualan: pelanggan mengembalikan barang yang sudah difaktur. Jurnalnya
+// kebalikan dari faktur penjualan (debit Penjualan + PPN Keluaran, kredit Piutang
+// Usaha) dan stoknya masuk lagi (stock_move qtyIn).
+model SalesReturn {
+  id             Int          @id @default(autoincrement())
+  no             String       @unique
+  date           DateTime
+  salesInvoiceId Int          @map("sales_invoice_id")
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  companyId      Int?         @map("company_id")
+  company        Company?     @relation(fields: [companyId], references: [id])
+  reason         String?
+  dpp            BigInt
+  ppn            BigInt
+  total          BigInt
+  createdAt      DateTime     @default(now()) @map("created_at")
+  createdBy      Int?         @map("created_by")
+  deletedAt      DateTime?    @map("deleted_at")
+
+  lines SalesReturnLine[]
+
+  @@map("sales_returns")
+}
+
+model SalesReturnLine {
+  id        Int         @id @default(autoincrement())
+  returnId  Int         @map("return_id")
+  return    SalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  itemId    Int         @map("item_id")
+  item      Item        @relation(fields: [itemId], references: [id])
+  qty       Decimal     @db.Decimal(14, 3)
+  unitPrice BigInt      @map("unit_price")
+  amount    BigInt
+
+  @@map("sales_return_lines")
 }
 
 model SalesInvoiceLine {
