@@ -13,12 +13,15 @@ const C = require("./common.js");
 const {
   Document, Paragraph, TextRun, AlignmentType, Table, TableRow, TableCell,
   WidthType, ShadingType, BorderStyle, Packer, SectionType, PageBreak, TableLayoutType,
-  VerticalAlign, TableOfContents, HeadingLevel, iconForCell, HeightRule, refImg, dxaToPx,
-  Header,
+  VerticalAlign, TableOfContents, HeadingLevel, iconForCell, refImg, dxaToPx,
+  Header, WpsShapeRun,
 } = C;
 
 // Edit this once per job (e.g. "Manual_Book_OverheadCrane_5T").
 const OUTPUT_PREFIX = "Manual_Book";
+
+// Border for both the empty placeholder Shapes and real reference images.
+const SHAPE_OUTLINE = { type: "solidFill", solidFillType: "rgb", value: "000000", width: 9525 };
 
 const B = "000000";
 
@@ -139,39 +142,25 @@ function emptyHeader() {
     })],
   });
 }
-function boxedImage(imageRun, widthDxa) {
-  return new Table({
-    width: { size: widthDxa, type: WidthType.DXA },
-    columnWidths: [widthDxa],
-    layout: TableLayoutType.FIXED,
-    alignment: AlignmentType.CENTER,
-    borders: grid(),
-    rows: [new TableRow({
-      children: [new TableCell({
-        width: { size: widthDxa, type: WidthType.DXA },
-        margins: { top: 60, bottom: 60, left: 60, right: 60 },
-        children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [imageRun] })],
-      })],
-    })],
-  });
+// Rule 6: a real image already carries its own border (see common.js
+// refImg's `outline` option) - this just centers it, no table frame.
+function boxedImage(imageRun) {
+  return new Paragraph({ alignment: AlignmentType.CENTER, children: [imageRun] });
 }
-// Rule 6(c): empty bordered box for a photo the user adds later themselves.
+// Rule 6(c): empty placeholder for a photo the user adds later in Word - a
+// real DrawingML rectangle Shape (WpsShapeRun), NOT a table. The user
+// selects it and uses Word's Shape Format > Shape Fill > Picture to drop a
+// real photo in later; the border stays as the shape's own outline.
 function photoBox(caption, widthDxa, heightTwips) {
-  return new Table({
-    width: { size: widthDxa, type: WidthType.DXA },
-    columnWidths: [widthDxa],
-    layout: TableLayoutType.FIXED,
+  return new Paragraph({
     alignment: AlignmentType.CENTER,
-    borders: grid(),
-    rows: [new TableRow({
-      height: { value: heightTwips, rule: HeightRule.EXACT },
-      children: [new TableCell({
-        width: { size: widthDxa, type: WidthType.DXA },
-        verticalAlign: VerticalAlign.CENTER,
-        children: [new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: `[ ${caption} ]`, italics: true, size: 14, color: "808080" })],
-        })],
+    children: [new WpsShapeRun({
+      type: "wps",
+      transformation: { width: dxaToPx(widthDxa), height: dxaToPx(heightTwips) },
+      outline: SHAPE_OUTLINE,
+      children: [new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: `[ ${caption} ]`, italics: true, size: 14, color: "808080" })],
       })],
     })],
   });
@@ -341,7 +330,7 @@ function buildManual(langCode, T, outFile) {
           colBreak(),
           chapter(11, T.ch11.title),
           sub(T.ch11.subA), p(T.ch11.pA),
-          ...(T.ch11.wiringImage ? [boxedImage(T.ch11.wiringImage, 4650)] : [photoBox(T.ch11.pA, 4650, 2900)]),
+          ...(T.ch11.wiringImage ? [boxedImage(T.ch11.wiringImage)] : [photoBox(T.ch11.pA, 4650, 2900)]),
 
           colBreak(),
           sub(T.ch11.subB),
@@ -350,7 +339,7 @@ function buildManual(langCode, T, outFile) {
           sub(T.ch11.subC), p(T.ch11.pC),
           dataTable([TABLE_WIDTH * 0.323, TABLE_WIDTH * 0.677].map(Math.round), T.ch11.legendTable),
           new Paragraph({ spacing: { before: 100 } }),
-          ...(T.ch11.explodedImage ? [boxedImage(T.ch11.explodedImage, 4650)] : [photoBox(T.ch11.pC, 4650, 3000)]),
+          ...(T.ch11.explodedImage ? [boxedImage(T.ch11.explodedImage)] : [photoBox(T.ch11.pC, 4650, 3000)]),
         ],
       },
     ],

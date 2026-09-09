@@ -4,7 +4,7 @@ const {
   TableCell, WidthType, ShadingType, BorderStyle, ImageRun, Header, Footer,
   PageNumber, NumberFormat, Packer, PageBreak, LevelFormat, convertInchesToTwip,
   TableOfContents, VerticalAlign, PositionalTab, PositionalTabAlignment, PositionalTabLeader,
-  PageOrientation, SectionType, ColumnBreak, HeightRule, TableLayoutType,
+  PageOrientation, SectionType, ColumnBreak, HeightRule, TableLayoutType, WpsShapeRun,
 } = require("docx");
 
 const NAVY = "1F3864";
@@ -128,7 +128,12 @@ function fitRefBox(key, maxW, maxH) {
 }
 function refImg(key, maxW, maxH) {
   const size = fitRefBox(key, maxW, maxH);
-  return new ImageRun({ type: "jpg", data: fs.readFileSync(REF[key]), transformation: size });
+  return new ImageRun({
+    type: "jpg",
+    data: fs.readFileSync(REF[key]),
+    transformation: size,
+    outline: { type: "solidFill", solidFillType: "rgb", value: "000000", width: 9525 },
+  });
 }
 
 function img(key, maxW, maxH) {
@@ -303,5 +308,5 @@ module.exports = {
   IMG, IMG_SIZE, fitBox, img, H1, H2, H3, P, bulletsConfig, bullet, cell, placeholder, noteBox, footerContact,
   headerManual, footerPageNum, stepList,
   PageOrientation, SectionType, ColumnBreak, ICON, ICON_SIZE, fitIconBox, icon,
-  dxaToPx, iconForCell, HeightRule, REF, REF_SIZE, fitRefBox, refImg, TableLayoutType,
+  dxaToPx, iconForCell, HeightRule, REF, REF_SIZE, fitRefBox, refImg, TableLayoutType, WpsShapeRun,
 };

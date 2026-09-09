@@ -70,6 +70,19 @@ unless the user explicitly asks for something different.
    box (`photoBox()`) the user fills in later with their own real photo.
    Never fabricate a photo, and never use a different brand's/different
    product's branded photo to represent this unit.
+   **A placeholder must be a real Word Shape, not a table styled to look
+   like a box.** `photoBox()` builds a `WpsShapeRun` (a genuine DrawingML
+   rectangle, `outline` set, no fill) — the same object Word's own
+   Insert → Shapes → Rectangle produces — so the user can select it and use
+   Shape Format → Shape Fill → Picture to drop a real photo in. An earlier
+   version used a bordered single-cell `Table` for this and the user (a
+   working freelancer who edits these by hand in Word) correctly called it
+   out as the wrong tool: a table cell doesn't take a picture fill cleanly
+   and isn't what "insert an image placeholder" means to someone editing in
+   Word. Likewise `boxedImage()` no longer wraps a real reference image in
+   a table — the border is a native `outline` option on the `ImageRun`
+   itself (set in `common.js`'s `refImg()`), so the picture just sits
+   centered with its own border, nothing wrapping it.
 7. **Never write Word-UI-mechanics instructions into the document body.**
    No "klik kanan lalu pilih...", "Update Field", "Change Picture", etc.
    inside any paragraph, table cell, or caption. Those tips belong in chat
