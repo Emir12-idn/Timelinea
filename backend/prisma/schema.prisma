@@ -123,6 +123,14 @@ enum CostingMethod {
   fifo
 }
 
+// Pabrikasi §2 (gap module) — status Perintah Produksi (Work Order).
+enum WorkOrderStatus {
+  draft
+  in_progress
+  done
+  cancelled
+}
+
 // ---------------------------------------------------------------------------
 // Auth / users
 // ---------------------------------------------------------------------------
@@ -282,6 +290,10 @@ model Item {
   stockLayers         StockLayer[]
   purchaseReturnLines PurchaseReturnLine[]
   salesReturnLines    SalesReturnLine[]
+  // Pabrikasi §2 (gap module)
+  boms                BillOfMaterial[]     @relation("BomProduct")
+  bomMaterialLines    BillOfMaterialLine[]
+  workOrders          WorkOrder[]
 
   @@map("items")
 }
@@ -308,6 +320,7 @@ model Project {
   stockMoves     StockMove[]
   tasks          ProjectTask[]
   basts          Bast[]
+  workOrders     WorkOrder[]
 
   @@map("projects")
 }
@@ -338,6 +351,7 @@ model Warehouse {
 
   stockMoves  StockMove[]
   stockLayers StockLayer[]
+  workOrders  WorkOrder[]
 
   @@map("warehouses")
 }
@@ -693,6 +707,71 @@ model StockLayer {
 
   @@index([itemId, warehouseId])
   @@map("stock_layers")
+}
+
+// ---------------------------------------------------------------------------
+// Pabrikasi §2 (gap module) — BOM + Work Order, tergantung Persediaan §1 di atas.
+// ---------------------------------------------------------------------------
+
+model BillOfMaterial {
+  id        Int       @id @default(autoincrement())
+  itemId    Int       @map("item_id")
+  item      Item      @relation("BomProduct", fields: [itemId], references: [id])
+  version   Int       @default(1)
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy Int?      @map("created_by")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines      BillOfMaterialLine[]
+  workOrders WorkOrder[]
+
+  @@unique([itemId, version])
+  @@map("bill_of_materials")
+}
+
+model BillOfMaterialLine {
+  id             Int            @id @default(autoincrement())
+  bomId          Int            @map("bom_id")
+  bom            BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  materialItemId Int            @map("material_item_id")
+  materialItem   Item           @relation(fields: [materialItemId], references: [id])
+  qtyPerUnit     Decimal        @map("qty_per_unit") @db.Decimal(14, 4)
+  uom            String
+
+  @@map("bill_of_material_lines")
+}
+
+// Posting ke status "done" mengonsumsi bahan (stock-out per baris BOM x planned_qty,
+// biaya dari CostingService) dan menghasilkan barang jadi (stock-in pada biaya =
+// total bahan terkonsumsi + conversion_cost), lalu memposting satu jurnal produksi —
+// lihat ManufacturingService & JournalService.postProduction.
+model WorkOrder {
+  id             Int             @id @default(autoincrement())
+  no             String          @unique
+  date           DateTime
+  productItemId  Int             @map("product_item_id")
+  productItem    Item            @relation(fields: [productItemId], references: [id])
+  bomId          Int             @map("bom_id")
+  bom            BillOfMaterial  @relation(fields: [bomId], references: [id])
+  plannedQty     Decimal         @map("planned_qty") @db.Decimal(14, 3)
+  warehouseId    Int             @map("warehouse_id")
+  warehouse      Warehouse       @relation(fields: [warehouseId], references: [id])
+  // Biaya konversi manual (tenaga kerja/overhead) opsional, ditambahkan ke biaya
+  // barang jadi saat diposting — lihat §4 aturan jurnal "Produksi Selesai".
+  conversionCost BigInt          @default(0) @map("conversion_cost")
+  status         WorkOrderStatus @default(draft)
+  projectId      Int?            @map("project_id")
+  project        Project?        @relation(fields: [projectId], references: [id])
+  note           String?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  createdBy      Int?            @map("created_by")
+  deletedAt      DateTime?       @map("deleted_at")
+
+  @@index([projectId])
+  @@map("work_orders")
 }
 
 // ---------------------------------------------------------------------------

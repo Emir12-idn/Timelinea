@@ -327,6 +327,37 @@ export class JournalService {
     );
   }
 
+  // ---- Rule: Produksi Selesai (Work Order) -> Debit Persediaan (barang jadi, biaya
+  //            bahan + konversi) | Kredit Persediaan (bahan terkonsumsi), Kredit Beban
+  //            Konversi Produksi (kalau ada biaya konversi manual — pindah dari beban ke
+  //            nilai persediaan, standar akuntansi penyerapan overhead produksi).
+  postProduction(
+    params: { workOrderId: number; no: string; date: Date; materialCost: bigint; conversionCost: bigint; companyId: number | null },
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    const lines: JournalLineInput[] = [
+      { accountCode: COA_CODE.PERSEDIAAN, debit: params.materialCost + params.conversionCost },
+      { accountCode: COA_CODE.PERSEDIAAN, credit: params.materialCost },
+    ];
+    if (params.conversionCost > 0n) {
+      lines.push({ accountCode: COA_CODE.BEBAN_KONVERSI, credit: params.conversionCost });
+    }
+    return this.postEntry(
+      {
+        date: params.date,
+        refType: "work_order",
+        refId: params.workOrderId,
+        refNo: params.no,
+        type: "Produksi",
+        companyId: params.companyId,
+        createdBy,
+        lines,
+      },
+      db,
+    );
+  }
+
   // ---- Rule: Penyusutan bulanan -> Debit Beban Penyusutan | Kredit Akumulasi Penyusutan
   postDepreciation(
     asset: { id: number; code: string; companyId: number | null },

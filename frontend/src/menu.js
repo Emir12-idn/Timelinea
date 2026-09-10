@@ -1,6 +1,6 @@
 import {
   Home, ShoppingCart, TrendingUp, Boxes, Landmark, BookOpen, Building2,
-  FolderKanban, FileBarChart, Settings, Fingerprint,
+  FolderKanban, FileBarChart, Settings, Fingerprint, Factory,
 } from "lucide-react";
 
 export const MENU = [
@@ -24,6 +24,11 @@ export const MENU = [
     id: "persediaan", label: "Persediaan", icon: Boxes, children: [
       { id: "ps-barang", label: "Barang & Jasa" },
       { id: "ps-gudang", label: "Gudang & Transfer" },
+    ],
+  },
+  {
+    id: "pabrikasi", label: "Pabrikasi", icon: Factory, children: [
+      { id: "pab-produksi", label: "BOM & Work Order" },
     ],
   },
   {

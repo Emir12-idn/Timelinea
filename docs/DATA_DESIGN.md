@@ -269,3 +269,39 @@ fitur publik Accurate 5 Enterprise terhadap skema yang sudah ada. Style visual E
 | Transaksi | Debit | Kredit |
 |---|---|---|
 | HPP Penjualan (Surat Jalan, barang stock) | Harga Pokok Penjualan (biaya riil) | Persediaan (biaya riil) |
+
+### 9.2 Pabrikasi / Produksi (Enterprise-tier, tergantung §9.1)
+
+- **bill_of_material**: item_id (produk jadi), version (auto-increment per item), is_active
+  (hanya satu versi aktif per item — versi baru otomatis menonaktifkan yang lama).
+  - **bill_of_material_line**: bom_id, material_item_id, qty_per_unit, uom.
+- **work_order**: no (WO-xxxx via NumberingService), date, product_item_id, bom_id,
+  planned_qty, warehouse_id, conversion_cost (biaya tenaga kerja/overhead manual,
+  opsional), status: enum(draft, in_progress, done, cancelled), project_id (nullable).
+- Alur status: `draft → in_progress → done`, atau batal dari `draft`/`in_progress`. Tidak
+  ada transisi keluar dari `done`/`cancelled`.
+- **Posting ke "done"** (satu-satunya titik yang menyentuh stok & jurnal):
+  1. Untuk tiap baris BOM: konsumsi bahan = qty_per_unit × planned_qty, stock-out lewat
+     `CostingService` (biaya riil average/FIFO) dari `warehouse_id` Work Order.
+  2. Barang jadi masuk (stock-in) sejumlah `planned_qty`, pada biaya per unit =
+     (total biaya bahan terkonsumsi + conversion_cost) / planned_qty.
+  3. Satu jurnal otomatis "Produksi" (`JournalService.postProduction`, §4 di bawah).
+  4. Status Work Order → `done`.
+- **§4 — aturan jurnal baru:**
+
+  | Transaksi | Debit | Kredit |
+  |---|---|---|
+  | Produksi Selesai (Work Order → done) | Persediaan (barang jadi = bahan + konversi) | Persediaan (bahan terkonsumsi), Beban Konversi Produksi (6-6300, kalau conversion_cost > 0) |
+
+  Catatan: karena COA sistem ini hanya punya satu akun Persediaan (1-1400, tidak
+  dipecah bahan baku/WIP/barang jadi), transformasi bahan→barang jadi dicatat sebagai
+  dua baris di akun yang sama (debit sisi produk jadi, kredit sisi bahan) — **judgment
+  call** untuk tetap sederhana (lihat laporan akhir tugas ini) alih-alih menambah akun
+  WIP terpisah yang tidak diminta spesifikasi.
+- **Laporan** (read-only, pola sama dengan Laporan Keuangan): `GET
+  /work-orders/reports/materials-used` (bahan terpakai per Work Order, dari
+  `stock_move` refType=`work_order`), `GET /work-orders/reports/production`
+  (rencana vs realisasi — realisasi = planned_qty kalau status `done`, 0 kalau belum).
+- Endpoint: `GET/POST/PATCH/DELETE /boms`, `GET /boms/active/:itemId`,
+  `GET/POST /work-orders`, `PATCH /work-orders/:id/status`.
+- Frontend: menu **Pabrikasi → BOM & Work Order** (`frontend/src/pages/Pabrikasi.jsx`).

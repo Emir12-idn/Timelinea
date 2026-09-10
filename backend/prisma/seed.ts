@@ -26,6 +26,7 @@ const COA: { code: string; name: string; type: AccountType; taxCode?: string; ta
   { code: "5-5100", name: "Harga Pokok Penjualan", type: "beban" },
   { code: "6-6100", name: "Beban Gaji & Upah", type: "beban" },
   { code: "6-6200", name: "Beban Penyusutan", type: "beban" }, // extra
+  { code: "6-6300", name: "Beban Konversi Produksi", type: "beban" }, // extra — Pabrikasi §2
 ];
 
 async function main() {

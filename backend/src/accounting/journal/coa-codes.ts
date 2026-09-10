@@ -26,4 +26,7 @@ export const COA_CODE = {
   HPP: "5-5100",
   BEBAN_GAJI: "6-6100",
   BEBAN_PENYUSUTAN: "6-6200",
+  // Pabrikasi §2 (gap module) — biaya konversi (tenaga kerja/overhead) manual yang
+  // diserap ke biaya barang jadi saat Work Order selesai. Lihat seed.ts.
+  BEBAN_KONVERSI: "6-6300",
 } as const;

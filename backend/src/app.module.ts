@@ -34,6 +34,8 @@ import { EmployeeLoansModule } from "./hr/employee-loans/employee-loans.module";
 import { PayslipsModule } from "./hr/payslips/payslips.module";
 import { FixedAssetsModule } from "./fixed-assets/fixed-assets.module";
 import { ReportsModule } from "./reports/reports.module";
+import { BomModule } from "./manufacturing/bom/bom.module";
+import { WorkOrdersModule } from "./manufacturing/work-orders/work-orders.module";
 
 @Module({
   imports: [
@@ -72,6 +74,8 @@ import { ReportsModule } from "./reports/reports.module";
     PayslipsModule,
     FixedAssetsModule,
     ReportsModule,
+    BomModule,
+    WorkOrdersModule,
   ],
 })
 export class AppModule {}

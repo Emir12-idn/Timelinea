@@ -19,6 +19,7 @@ import PurchaseReturnList from "./pages/PurchaseReturnList";
 import Kasbon from "./pages/Kasbon";
 import BankReconciliation from "./pages/BankReconciliation";
 import Persediaan from "./pages/Persediaan";
+import Pabrikasi from "./pages/Pabrikasi";
 import { labelPath } from "./menu";
 
 function Shell() {
@@ -42,6 +43,7 @@ function Shell() {
     if (active === "ab-kasbon") return <Kasbon />;
     if (active === "kb-rekonsiliasi") return <BankReconciliation />;
     if (active === "ps-gudang") return <Persediaan />;
+    if (active === "pab-produksi") return <Pabrikasi />;
     const { crumbs, title } = labelPath(active);
     return <Placeholder title={title} crumbs={crumbs} />;
   };
