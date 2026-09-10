@@ -1,6 +1,6 @@
 import { Type } from "class-transformer";
 import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
-import { ItemType } from "@prisma/client";
+import { CostingMethod, ItemType } from "@prisma/client";
 
 export class CreateItemDto {
   @IsString()
@@ -31,4 +31,9 @@ export class CreateItemDto {
   @IsInt()
   @Min(0)
   lastCost?: number;
+
+  /** Persediaan §1 (gap module) — default average kalau kosong (lihat coa-codes/schema untuk catatan). */
+  @IsOptional()
+  @IsEnum(CostingMethod)
+  costingMethod?: CostingMethod;
 }

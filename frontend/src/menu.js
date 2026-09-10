@@ -23,6 +23,7 @@ export const MENU = [
   {
     id: "persediaan", label: "Persediaan", icon: Boxes, children: [
       { id: "ps-barang", label: "Barang & Jasa" },
+      { id: "ps-gudang", label: "Gudang & Transfer" },
     ],
   },
   {

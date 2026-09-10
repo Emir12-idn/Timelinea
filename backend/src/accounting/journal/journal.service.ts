@@ -301,6 +301,32 @@ export class JournalService {
     );
   }
 
+  // ---- Rule: HPP Penjualan -> Debit Harga Pokok Penjualan (amount) | Kredit Persediaan (amount)
+  // Persediaan §1 (gap module) — biaya riil dari CostingService (average/FIFO),
+  // dipicu saat Surat Jalan diposting untuk baris item bertipe stock.
+  postCogs(
+    params: { refId: number; refNo: string; date: Date; amount: bigint; companyId: number | null },
+    db: Prisma.TransactionClient | PrismaService,
+    createdBy?: number | null,
+  ) {
+    return this.postEntry(
+      {
+        date: params.date,
+        refType: "delivery_order",
+        refId: params.refId,
+        refNo: params.refNo,
+        type: "HPP Penjualan",
+        companyId: params.companyId,
+        createdBy,
+        lines: [
+          { accountCode: COA_CODE.HPP, debit: params.amount },
+          { accountCode: COA_CODE.PERSEDIAAN, credit: params.amount },
+        ],
+      },
+      db,
+    );
+  }
+
   // ---- Rule: Penyusutan bulanan -> Debit Beban Penyusutan | Kredit Akumulasi Penyusutan
   postDepreciation(
     asset: { id: number; code: string; companyId: number | null },

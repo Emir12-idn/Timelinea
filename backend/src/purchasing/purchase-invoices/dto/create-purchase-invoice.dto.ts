@@ -20,6 +20,12 @@ export class CreatePurchaseInvoiceDto {
   @IsInt()
   poId?: number;
 
+  /** Gudang penerimaan barang PO — kalau kosong dipakai gudang default (Persediaan §1). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  warehouseId?: number;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)

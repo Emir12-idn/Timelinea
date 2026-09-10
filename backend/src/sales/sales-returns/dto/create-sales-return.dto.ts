@@ -19,6 +19,12 @@ export class CreateSalesReturnDto {
   @IsString()
   reason?: string;
 
+  /** Gudang penerimaan retur — kalau kosong dipakai gudang default (Persediaan §1). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  warehouseId?: number;
+
   @ValidateNested({ each: true })
   @Type(() => SalesReturnLineDto)
   @ArrayMinSize(1)

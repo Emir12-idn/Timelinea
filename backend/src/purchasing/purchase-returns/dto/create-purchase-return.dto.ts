@@ -19,6 +19,12 @@ export class CreatePurchaseReturnDto {
   @IsString()
   reason?: string;
 
+  /** Gudang asal barang retur — kalau kosong dipakai gudang default (Persediaan §1). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  warehouseId?: number;
+
   @ValidateNested({ each: true })
   @Type(() => PurchaseReturnLineDto)
   @ArrayMinSize(1)

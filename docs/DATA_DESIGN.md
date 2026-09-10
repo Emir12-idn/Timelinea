@@ -217,3 +217,55 @@ Antrean berikutnya:
 3. Posting otomatis untuk penerimaan/pembayaran kas & penyusutan.
 4. Pindah stok/persediaan berbasis `stock_move`.
 5. Sambungkan ke backend + database sesuai dokumen ini.
+
+---
+
+## 9. Modul tambahan — paritas fungsi dengan Accurate 5 Enterprise
+
+Emerald ERP dibangun untuk menyamai **fungsi, alur kerja, dan logika bisnis** Accurate 5
+Enterprise (produk komersial yang sebelumnya dipakai) — bukan tampilannya. Bagian ini
+mendokumentasikan modul yang ditambahkan setelah build awal di §1–§8, hasil perbandingan
+fitur publik Accurate 5 Enterprise terhadap skema yang sudah ada. Style visual Emerald
+(navy `#1F3A6E` + gold `#C7A24A`, Poppins) tetap dipakai — tidak meniru layar/ikon Accurate.
+
+### 9.1 Persediaan — multi-gudang, metode costing, batch/serial
+
+- **warehouse**: code, name, address, is_default. Setiap `stock_move` sekarang tertaut ke
+  satu gudang (`warehouse_id`, nullable untuk kompatibilitas mundur dengan mutasi lama —
+  tapi service layer selalu mengisinya untuk mutasi baru, fallback ke gudang default).
+  Stok per barang per gudang tetap dihitung dari mutasi (`SUM(qty_in) - SUM(qty_out)`
+  difilter `warehouse_id`), bukan angka tersimpan — prinsip yang sudah ada di §3
+  dipertahankan.
+- **item.costing_method**: enum `average` (default) | `fifo`. **Judgment call**: default
+  `average` karena lebih sederhana dan aman untuk bisnis yang belum menegaskan butuh FIFO;
+  bisa diganti per-item lewat menu Barang & Jasa.
+- **stock_move** tambahan field: `batch_no`, `serial_no`, `expiry_date` (semua nullable,
+  opsional diisi), dan `unit_cost` — biaya per unit pada saat mutasi itu, hasil dari engine
+  costing (bukan lagi placeholder).
+- **stock_layer** (khusus item FIFO): item_id, warehouse_id, qty_remaining, unit_cost,
+  in_date. Stock-in FIFO membuka layer baru; stock-out mengonsumsi layer tertua dulu
+  (`in_date`/`id` ascending), unit_cost pada `stock_move` keluar = rata-rata tertimbang
+  dari layer yang terkonsumsi.
+- **Engine costing** (`backend/src/inventory/costing.service.ts`): `stockIn`/`stockOut`/
+  `transfer`. `average` dihitung on-the-fly dari nilai on-hand (turunan mutasi, konsisten
+  dengan prinsip stok-dari-mutasi), tidak ada saldo rata-rata tersimpan terpisah.
+- **HPP Penjualan diposting otomatis** saat Surat Jalan (`delivery_order`) dibuat, untuk
+  baris barang bertipe `stock`: Debit Harga Pokok Penjualan (5-5100), Kredit Persediaan
+  (1-1400), sebesar biaya riil hasil engine costing — lihat aturan baru di §4 di bawah.
+  Sebelumnya tidak ada posting HPP sama sekali di titik penjualan; ini melengkapi celah itu.
+- **Transfer Barang** antar gudang: `POST /stock-moves/transfers` — satu pasang stock_move
+  (keluar dari asal, masuk ke tujuan) pada biaya yang sama (dari engine costing di gudang asal).
+- **Judgment call**: retur penjualan (barang masuk kembali) dicatat pada `item.lastCost`
+  (biaya terakhir diketahui) karena faktur penjualan tidak menyimpan biaya pokok per baris —
+  pendekatan pragmatis terbaik yang tersedia tanpa mengubah skema penjualan.
+- Endpoint: `GET/POST/PATCH/DELETE /warehouses`, `GET /stock-moves/by-warehouse/:itemId`,
+  `POST /stock-moves/adjustments` (kini menerima `warehouseId`, `unitCost`, `batchNo`,
+  `serialNo`, `expiryDate`), `POST /stock-moves/transfers`.
+- Frontend: menu Persediaan → **Gudang & Transfer** (`frontend/src/pages/Persediaan.jsx`) —
+  daftar gudang, stok per gudang per barang, form transfer.
+
+**§4 — aturan jurnal baru:**
+
+| Transaksi | Debit | Kredit |
+|---|---|---|
+| HPP Penjualan (Surat Jalan, barang stock) | Harga Pokok Penjualan (biaya riil) | Persediaan (biaya riil) |

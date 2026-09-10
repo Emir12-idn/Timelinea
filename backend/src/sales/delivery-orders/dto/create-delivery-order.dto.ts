@@ -26,6 +26,12 @@ export class CreateDeliveryOrderDto {
   @IsInt()
   projectId?: number;
 
+  /** Gudang pengiriman — kalau kosong dipakai gudang default (Persediaan §1). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  warehouseId?: number;
+
   @ValidateNested({ each: true })
   @Type(() => DeliveryOrderLineDto)
   @ArrayMinSize(1)

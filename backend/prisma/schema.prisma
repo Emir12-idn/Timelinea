@@ -115,6 +115,14 @@ enum CashTransactionType {
   payment
 }
 
+// Persediaan §1 (gap module) — metode costing per item. Default average: lebih
+// sederhana dan aman sebagai default untuk bisnis yang belum menegaskan butuh FIFO
+// (judgment call — lihat laporan akhir tugas ini).
+enum CostingMethod {
+  average
+  fifo
+}
+
 // ---------------------------------------------------------------------------
 // Auth / users
 // ---------------------------------------------------------------------------
@@ -168,13 +176,13 @@ model Company {
   createdBy   Int?      @map("created_by")
   deletedAt   DateTime? @map("deleted_at")
 
-  purchaseOrders   PurchaseOrder[]
-  salesOrders      SalesOrder[]
-  purchaseInvoices PurchaseInvoice[]
-  salesInvoices    SalesInvoice[]
-  journalEntries   JournalEntry[]
-  cashTransactions CashTransaction[]
-  fixedAssets      FixedAsset[]
+  purchaseOrders     PurchaseOrder[]
+  salesOrders        SalesOrder[]
+  purchaseInvoices   PurchaseInvoice[]
+  salesInvoices      SalesInvoice[]
+  journalEntries     JournalEntry[]
+  cashTransactions   CashTransaction[]
+  fixedAssets        FixedAsset[]
   purchaseReturns    PurchaseReturn[]
   salesReturns       SalesReturn[]
   bankStatementLines BankStatementLine[]
@@ -249,28 +257,31 @@ model ItemGroup {
 }
 
 model Item {
-  id        Int        @id @default(autoincrement())
-  code      String     @unique
-  name      String
-  uom       String
-  type      ItemType
-  groupId   Int?       @map("group_id")
-  group     ItemGroup? @relation(fields: [groupId], references: [id])
-  minStock  Decimal?   @map("min_stock") @db.Decimal(14, 3)
-  lastCost  BigInt?    @map("last_cost")
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
-  createdBy Int?       @map("created_by")
-  deletedAt DateTime?  @map("deleted_at")
+  id            Int           @id @default(autoincrement())
+  code          String        @unique
+  name          String
+  uom           String
+  type          ItemType
+  groupId       Int?          @map("group_id")
+  group         ItemGroup?    @relation(fields: [groupId], references: [id])
+  minStock      Decimal?      @map("min_stock") @db.Decimal(14, 3)
+  lastCost      BigInt?       @map("last_cost")
+  // Persediaan §1 (gap module) — default average: lihat catatan di enum CostingMethod.
+  costingMethod CostingMethod @default(average) @map("costing_method")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdBy     Int?          @map("created_by")
+  deletedAt     DateTime?     @map("deleted_at")
 
-  purchaseOrderLines   PurchaseOrderLine[]
-  salesOrderLines      SalesOrderLine[]
-  deliveryOrderLines   DeliveryOrderLine[]
-  salesInvoiceLines    SalesInvoiceLine[]
-  bastLines            BastLine[]
-  stockMoves           StockMove[]
-  purchaseReturnLines  PurchaseReturnLine[]
-  salesReturnLines     SalesReturnLine[]
+  purchaseOrderLines  PurchaseOrderLine[]
+  salesOrderLines     SalesOrderLine[]
+  deliveryOrderLines  DeliveryOrderLine[]
+  salesInvoiceLines   SalesInvoiceLine[]
+  bastLines           BastLine[]
+  stockMoves          StockMove[]
+  stockLayers         StockLayer[]
+  purchaseReturnLines PurchaseReturnLine[]
+  salesReturnLines    SalesReturnLine[]
 
   @@map("items")
 }
@@ -309,6 +320,26 @@ model Department {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("departments")
+}
+
+// Persediaan §1 (gap module) — multi-gudang. Setiap stock_move sekarang tertaut
+// ke satu gudang; stok per barang per gudang = SUM(qty_in) - SUM(qty_out) yang
+// difilter warehouse_id, mengikuti prinsip "stok dari mutasi" yang sudah ada.
+model Warehouse {
+  id        Int       @id @default(autoincrement())
+  code      String    @unique
+  name      String
+  address   String?
+  isDefault Boolean   @default(false) @map("is_default")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy Int?      @map("created_by")
+  deletedAt DateTime? @map("deleted_at")
+
+  stockMoves  StockMove[]
+  stockLayers StockLayer[]
+
+  @@map("warehouses")
 }
 
 // ---------------------------------------------------------------------------
@@ -387,20 +418,20 @@ model PurchaseInvoice {
 // pemasok. Jurnalnya kebalikan dari faktur pembelian (kredit Persediaan/HPP + PPN
 // Masukan, debit Utang Usaha) dan stoknya keluar lagi (stock_move qtyOut).
 model PurchaseReturn {
-  id                Int              @id @default(autoincrement())
-  no                String           @unique
+  id                Int             @id @default(autoincrement())
+  no                String          @unique
   date              DateTime
-  purchaseInvoiceId Int              @map("purchase_invoice_id")
-  purchaseInvoice   PurchaseInvoice  @relation(fields: [purchaseInvoiceId], references: [id])
-  companyId         Int?             @map("company_id")
-  company           Company?         @relation(fields: [companyId], references: [id])
+  purchaseInvoiceId Int             @map("purchase_invoice_id")
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  companyId         Int?            @map("company_id")
+  company           Company?        @relation(fields: [companyId], references: [id])
   reason            String?
   dpp               BigInt
   ppn               BigInt
   total             BigInt
-  createdAt         DateTime         @default(now()) @map("created_at")
-  createdBy         Int?             @map("created_by")
-  deletedAt         DateTime?        @map("deleted_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  createdBy         Int?            @map("created_by")
+  deletedAt         DateTime?       @map("deleted_at")
 
   lines PurchaseReturnLine[]
 
@@ -613,23 +644,55 @@ model DocumentLog {
 // ---------------------------------------------------------------------------
 
 model StockMove {
-  id        Int      @id @default(autoincrement())
-  itemId    Int      @map("item_id")
-  item      Item     @relation(fields: [itemId], references: [id])
-  date      DateTime
-  refType   String   @map("ref_type")
-  refId     Int?     @map("ref_id")
-  qtyIn     Decimal  @default(0) @map("qty_in") @db.Decimal(14, 3)
-  qtyOut    Decimal  @default(0) @map("qty_out") @db.Decimal(14, 3)
-  projectId Int?     @map("project_id")
-  project   Project? @relation(fields: [projectId], references: [id])
-  note      String?
-  createdAt DateTime @default(now()) @map("created_at")
-  createdBy Int?     @map("created_by")
+  id          Int        @id @default(autoincrement())
+  itemId      Int        @map("item_id")
+  item        Item       @relation(fields: [itemId], references: [id])
+  date        DateTime
+  refType     String     @map("ref_type")
+  refId       Int?       @map("ref_id")
+  qtyIn       Decimal    @default(0) @map("qty_in") @db.Decimal(14, 3)
+  qtyOut      Decimal    @default(0) @map("qty_out") @db.Decimal(14, 3)
+  projectId   Int?       @map("project_id")
+  project     Project?   @relation(fields: [projectId], references: [id])
+  // Persediaan §1 (gap module) — multi-gudang + biaya + batch/serial/kedaluwarsa.
+  // warehouseId tetap nullable di skema demi kompatibilitas mundur (mutasi lama
+  // sebelum modul ini), tapi service layer sekarang selalu mengisinya (fallback
+  // ke gudang default) untuk setiap mutasi baru.
+  warehouseId Int?       @map("warehouse_id")
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  batchNo     String?    @map("batch_no")
+  serialNo    String?    @map("serial_no")
+  expiryDate  DateTime?  @map("expiry_date")
+  // Biaya per unit pada saat mutasi ini — hasil engine costing (average/FIFO),
+  // dipakai baik untuk stock-in (biaya perolehan) maupun stock-out (biaya yang
+  // dikonsumsi, dasar HPP). Lihat inventory/costing.service.ts.
+  unitCost    BigInt?    @map("unit_cost")
+  note        String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  createdBy   Int?       @map("created_by")
 
   @@index([itemId])
   @@index([projectId])
+  @@index([warehouseId])
   @@map("stock_moves")
+}
+
+// Layer biaya FIFO — hanya dipakai untuk item dengan costingMethod = fifo.
+// Setiap stock-in FIFO membuat satu layer baru; stock-out mengonsumsi layer
+// tertua dulu (qtyRemaining berkurang), lihat CostingService.consumeFifoLayers.
+model StockLayer {
+  id           Int       @id @default(autoincrement())
+  itemId       Int       @map("item_id")
+  item         Item      @relation(fields: [itemId], references: [id])
+  warehouseId  Int       @map("warehouse_id")
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+  qtyRemaining Decimal   @map("qty_remaining") @db.Decimal(14, 3)
+  unitCost     BigInt    @map("unit_cost")
+  inDate       DateTime  @map("in_date")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([itemId, warehouseId])
+  @@map("stock_layers")
 }
 
 // ---------------------------------------------------------------------------

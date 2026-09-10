@@ -4,6 +4,7 @@ import { NumberingService } from "../../common/numbering.service";
 import { dppFromTotal } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { COA_CODE } from "../../accounting/journal/coa-codes";
+import { CostingService } from "../../inventory/costing.service";
 import { CreatePurchaseInvoiceDto } from "./dto/create-purchase-invoice.dto";
 
 @Injectable()
@@ -12,6 +13,7 @@ export class PurchaseInvoicesService {
     private prisma: PrismaService,
     private numbering: NumberingService,
     private journal: JournalService,
+    private costing: CostingService,
   ) {}
 
   findAll() {
@@ -76,18 +78,20 @@ export class PurchaseInvoicesService {
       });
 
       if (po) {
+        const warehouseId = dto.warehouseId ?? (await this.costing.getDefaultWarehouseId(tx));
         for (const line of po.lines) {
-          await tx.stockMove.create({
-            data: {
-              itemId: line.itemId,
-              date,
-              refType: "purchase_invoice",
-              refId: invoice.id,
-              qtyIn: line.qty,
-              projectId: po.projectId,
-              note: `Faktur Pembelian ${invoice.no} (PO ${po.no})`,
-              createdBy,
-            },
+          if (line.item.type !== "stock") continue;
+          await this.costing.stockIn(tx, {
+            itemId: line.itemId,
+            warehouseId,
+            qty: line.qty,
+            unitCost: line.unitPrice,
+            date,
+            refType: "purchase_invoice",
+            refId: invoice.id,
+            projectId: po.projectId ?? undefined,
+            note: `Faktur Pembelian ${invoice.no} (PO ${po.no})`,
+            createdBy,
           });
         }
         await tx.purchaseOrder.update({ where: { id: po.id }, data: { status: "received" } });

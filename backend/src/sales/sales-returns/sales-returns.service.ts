@@ -3,6 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
 import { lineAmount } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
+import { CostingService } from "../../inventory/costing.service";
 import { CreateSalesReturnDto } from "./dto/create-sales-return.dto";
 
 const PPN_RATE = 0.11;
@@ -24,6 +25,7 @@ export class SalesReturnsService {
     private prisma: PrismaService,
     private numbering: NumberingService,
     private journal: JournalService,
+    private costing: CostingService,
   ) {}
 
   findAll() {
@@ -78,18 +80,23 @@ export class SalesReturnsService {
         },
       });
 
+      // Barang masuk kembali pada biaya terakhir yang diketahui (Item.lastCost) —
+      // faktur penjualan tidak menyimpan biaya pokok per baris, jadi ini pendekatan
+      // terbaik yang tersedia (judgment call, lihat laporan akhir tugas ini).
+      const warehouseId = dto.warehouseId ?? (await this.costing.getDefaultWarehouseId(tx));
       for (const l of lines) {
-        if (itemById.get(l.itemId)?.type === "stock") {
-          await tx.stockMove.create({
-            data: {
-              itemId: l.itemId,
-              date,
-              refType: "sales_return",
-              refId: ret.id,
-              qtyIn: l.qty,
-              note: `Retur Penjualan ${no} (Faktur ${invoice.no})`,
-              createdBy,
-            },
+        const item = itemById.get(l.itemId);
+        if (item?.type === "stock") {
+          await this.costing.stockIn(tx, {
+            itemId: l.itemId,
+            warehouseId,
+            qty: l.qty,
+            unitCost: item.lastCost ?? 0n,
+            date,
+            refType: "sales_return",
+            refId: ret.id,
+            note: `Retur Penjualan ${no} (Faktur ${invoice.no})`,
+            createdBy,
           });
         }
       }

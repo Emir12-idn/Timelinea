@@ -23,6 +23,7 @@ import { SalesReturnsModule } from "./sales/sales-returns/sales-returns.module";
 import { CashTransactionsModule } from "./cash/cash-transactions.module";
 import { BankReconciliationModule } from "./cash/bank-reconciliation/bank-reconciliation.module";
 import { StockMovesModule } from "./inventory/stock-moves.module";
+import { WarehousesModule } from "./inventory/warehouses/warehouses.module";
 import { ProjectTasksModule } from "./projectmgmt/project-tasks/project-tasks.module";
 import { WorkReportsModule } from "./projectmgmt/work-reports/work-reports.module";
 import { BastsModule } from "./projectmgmt/basts/basts.module";
@@ -60,6 +61,7 @@ import { ReportsModule } from "./reports/reports.module";
     CashTransactionsModule,
     BankReconciliationModule,
     StockMovesModule,
+    WarehousesModule,
     ProjectTasksModule,
     WorkReportsModule,
     BastsModule,

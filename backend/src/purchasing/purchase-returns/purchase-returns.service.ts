@@ -4,6 +4,7 @@ import { NumberingService } from "../../common/numbering.service";
 import { lineAmount } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { COA_CODE } from "../../accounting/journal/coa-codes";
+import { CostingService } from "../../inventory/costing.service";
 import { CreatePurchaseReturnDto } from "./dto/create-purchase-return.dto";
 
 const PPN_RATE = 0.11;
@@ -25,6 +26,7 @@ export class PurchaseReturnsService {
     private prisma: PrismaService,
     private numbering: NumberingService,
     private journal: JournalService,
+    private costing: CostingService,
   ) {}
 
   findAll() {
@@ -88,18 +90,18 @@ export class PurchaseReturnsService {
         },
       });
 
+      const warehouseId = dto.warehouseId ?? (await this.costing.getDefaultWarehouseId(tx));
       for (const l of lines) {
         if (itemById.get(l.itemId)?.type === "stock") {
-          await tx.stockMove.create({
-            data: {
-              itemId: l.itemId,
-              date,
-              refType: "purchase_return",
-              refId: ret.id,
-              qtyOut: l.qty,
-              note: `Retur Pembelian ${no} (Faktur ${invoice.no})`,
-              createdBy,
-            },
+          await this.costing.stockOut(tx, {
+            itemId: l.itemId,
+            warehouseId,
+            qty: l.qty,
+            date,
+            refType: "purchase_return",
+            refId: ret.id,
+            note: `Retur Pembelian ${no} (Faktur ${invoice.no})`,
+            createdBy,
           });
         }
       }
