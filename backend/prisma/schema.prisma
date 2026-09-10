@@ -957,6 +957,7 @@ model Account {
   journalLines       JournalLine[]
   cashTransactions   CashTransaction[]
   bankStatementLines BankStatementLine[]
+  budgets            Budget[]
 
   @@map("accounts")
 }
@@ -1063,4 +1064,25 @@ model BankStatementLine {
 
   @@index([accountId])
   @@map("bank_statement_lines")
+}
+
+// Buku Besar §3 (gap module) — Anggaran per akun + Monitor Anggaran. Satu baris per
+// kombinasi perusahaan+periode+akun; "Monitor Anggaran" (lihat BudgetsService.monitor)
+// membandingkannya terhadap realisasi (SUM journal_line pada periode yang sama) —
+// bukan jenis transaksi baru, murni fitur baca/perbandingan.
+model Budget {
+  id        Int      @id @default(autoincrement())
+  // 0 = seluruh perusahaan (tanpa company spesifik) — bukan FK nullable, mengikuti pola
+  // Counter.companyId: NULL tidak unik di Postgres, upsert butuh kolom non-null.
+  companyId Int      @default(0) @map("company_id")
+  period    String // format YYYY-MM
+  accountId Int      @map("account_id")
+  account   Account  @relation(fields: [accountId], references: [id])
+  amount    BigInt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy Int?     @map("created_by")
+
+  @@unique([companyId, period, accountId])
+  @@map("budgets")
 }

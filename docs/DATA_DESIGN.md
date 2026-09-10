@@ -305,3 +305,17 @@ fitur publik Accurate 5 Enterprise terhadap skema yang sudah ada. Style visual E
 - Endpoint: `GET/POST/PATCH/DELETE /boms`, `GET /boms/active/:itemId`,
   `GET/POST /work-orders`, `PATCH /work-orders/:id/status`.
 - Frontend: menu **Pabrikasi → BOM & Work Order** (`frontend/src/pages/Pabrikasi.jsx`).
+
+### 9.3 Anggaran per akun + Monitor Anggaran (Buku Besar)
+
+- **budget**: company_id (0 = seluruh perusahaan, pola sama dengan `Counter.companyId`
+  — lihat komentar di skema), period (YYYY-MM), account_id (FK), amount. Satu baris
+  per kombinasi company+period+account (`@@unique`); `POST /budgets` adalah upsert
+  (set ulang jumlahnya kalau sudah ada).
+- **Monitor Anggaran** (`GET /budgets/monitor?period=YYYY-MM`) murni fitur baca/
+  perbandingan — bukan transaksi baru: realisasi dihitung dari SUM `journal_line`
+  pada akun & periode yang sama, tandanya mengikuti saldo normal akun (sama seperti
+  `ReportsService.bukuBesar` — aset/beban dibaca apa adanya, pendapatan/kewajiban/
+  ekuitas dibalik). Selisih = anggaran − realisasi.
+- Endpoint: `GET/POST/DELETE /budgets`, `GET /budgets/monitor`.
+- Frontend: menu **Buku Besar → Monitor Anggaran** (`frontend/src/pages/Anggaran.jsx`).

@@ -41,6 +41,7 @@ export const MENU = [
     id: "bukubesar", label: "Buku Besar", icon: BookOpen, children: [
       { id: "bb-akun", label: "Daftar Akun" },
       { id: "bb-jurnal", label: "Bukti Jurnal" },
+      { id: "bb-anggaran", label: "Monitor Anggaran" },
     ],
   },
   {

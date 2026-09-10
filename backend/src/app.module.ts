@@ -36,6 +36,7 @@ import { FixedAssetsModule } from "./fixed-assets/fixed-assets.module";
 import { ReportsModule } from "./reports/reports.module";
 import { BomModule } from "./manufacturing/bom/bom.module";
 import { WorkOrdersModule } from "./manufacturing/work-orders/work-orders.module";
+import { BudgetsModule } from "./accounting/budgets/budgets.module";
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { WorkOrdersModule } from "./manufacturing/work-orders/work-orders.module
     ReportsModule,
     BomModule,
     WorkOrdersModule,
+    BudgetsModule,
   ],
 })
 export class AppModule {}
