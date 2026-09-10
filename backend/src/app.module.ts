@@ -37,6 +37,7 @@ import { ReportsModule } from "./reports/reports.module";
 import { BomModule } from "./manufacturing/bom/bom.module";
 import { WorkOrdersModule } from "./manufacturing/work-orders/work-orders.module";
 import { BudgetsModule } from "./accounting/budgets/budgets.module";
+import { ProjectBudgetsModule } from "./projectmgmt/project-budgets/project-budgets.module";
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { BudgetsModule } from "./accounting/budgets/budgets.module";
     BomModule,
     WorkOrdersModule,
     BudgetsModule,
+    ProjectBudgetsModule,
   ],
 })
 export class AppModule {}

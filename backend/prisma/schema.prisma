@@ -321,6 +321,7 @@ model Project {
   tasks          ProjectTask[]
   basts          Bast[]
   workOrders     WorkOrder[]
+  budget         ProjectBudget?
 
   @@map("projects")
 }
@@ -1085,4 +1086,33 @@ model Budget {
 
   @@unique([companyId, period, accountId])
   @@map("budgets")
+}
+
+// Proyek §4 (gap module) — RAB (Rencana Anggaran Biaya) per proyek. Satu RAB per
+// proyek (project_id unik); realisasi dibandingkan lewat ProjectBudgetsService,
+// dihitung dari transaksi yang sudah di-tag project_id (purchase_invoice via PO,
+// stock_move keluar) — bukan input baru, mengikuti prinsip "no man touch"/tidak
+// ada input ganda yang sudah dipakai modul Proyek (§2 dokumen ini).
+model ProjectBudget {
+  id        Int      @id @default(autoincrement())
+  projectId Int      @unique @map("project_id")
+  project   Project  @relation(fields: [projectId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy Int?     @map("created_by")
+
+  lines ProjectBudgetLine[]
+
+  @@map("project_budgets")
+}
+
+model ProjectBudgetLine {
+  id              Int           @id @default(autoincrement())
+  projectBudgetId Int           @map("project_budget_id")
+  projectBudget   ProjectBudget @relation(fields: [projectBudgetId], references: [id], onDelete: Cascade)
+  category        String?
+  description     String
+  plannedAmount   BigInt        @map("planned_amount")
+
+  @@map("project_budget_lines")
 }

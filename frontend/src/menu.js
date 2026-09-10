@@ -54,6 +54,7 @@ export const MENU = [
       { id: "pr-daftar", label: "Daftar Proyek" },
       { id: "pr-tugas", label: "Tugas & Jadwal" },
       { id: "pr-bast", label: "Berita Acara Serah Terima" },
+      { id: "pr-rab", label: "RAB & Realisasi Biaya" },
     ],
   },
   {

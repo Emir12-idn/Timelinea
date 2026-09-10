@@ -21,6 +21,7 @@ import BankReconciliation from "./pages/BankReconciliation";
 import Persediaan from "./pages/Persediaan";
 import Pabrikasi from "./pages/Pabrikasi";
 import Anggaran from "./pages/Anggaran";
+import RAB from "./pages/RAB";
 import { labelPath } from "./menu";
 
 function Shell() {
@@ -46,6 +47,7 @@ function Shell() {
     if (active === "ps-gudang") return <Persediaan />;
     if (active === "pab-produksi") return <Pabrikasi />;
     if (active === "bb-anggaran") return <Anggaran />;
+    if (active === "pr-rab") return <RAB />;
     const { crumbs, title } = labelPath(active);
     return <Placeholder title={title} crumbs={crumbs} />;
   };

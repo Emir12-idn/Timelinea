@@ -319,3 +319,22 @@ fitur publik Accurate 5 Enterprise terhadap skema yang sudah ada. Style visual E
   ekuitas dibalik). Selisih = anggaran − realisasi.
 - Endpoint: `GET/POST/DELETE /budgets`, `GET /budgets/monitor`.
 - Frontend: menu **Buku Besar → Monitor Anggaran** (`frontend/src/pages/Anggaran.jsx`).
+
+### 9.4 RAB (Rencana Anggaran Biaya) per proyek
+
+- **project_budget**: project_id (unik — satu RAB per proyek).
+  - **project_budget_line**: project_budget_id, category (nullable), description,
+    planned_amount. `POST /project-budgets` mengganti seluruh baris RAB proyek
+    sekaligus (kirim ulang semua baris tiap kali diedit — sederhana, tidak perlu
+    endpoint PATCH per baris).
+- **Realisasi biaya proyek** (`GET /project-budgets/:projectId/realization`) —
+  fitur baca, bukan transaksi baru: menjumlah ulang transaksi yang **sudah**
+  di-tag `project_id` (prinsip "input di modul asal", §2 dokumen ini) —
+  Faktur Pembelian yang PO-nya di-tag proyek ini + `stock_move` keluar yang
+  langsung di-tag proyek ini (dinilai pada `unit_cost`-nya, §9.1). Tidak
+  memasukkan Faktur Penjualan/SO — itu pendapatan terhadap `contract_value`,
+  bukan biaya.
+- Endpoint: `GET /project-budgets/:projectId`, `GET
+  /project-budgets/:projectId/realization`, `POST /project-budgets`.
+- Frontend: menu **Proyek & Departemen → RAB & Realisasi Biaya**
+  (`frontend/src/pages/RAB.jsx`).
