@@ -38,6 +38,7 @@ import { BomModule } from "./manufacturing/bom/bom.module";
 import { WorkOrdersModule } from "./manufacturing/work-orders/work-orders.module";
 import { BudgetsModule } from "./accounting/budgets/budgets.module";
 import { ProjectBudgetsModule } from "./projectmgmt/project-budgets/project-budgets.module";
+import { ChequeGiroModule } from "./cash/cheque-giro/cheque-giro.module";
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { ProjectBudgetsModule } from "./projectmgmt/project-budgets/project-budg
     WorkOrdersModule,
     BudgetsModule,
     ProjectBudgetsModule,
+    ChequeGiroModule,
   ],
 })
 export class AppModule {}

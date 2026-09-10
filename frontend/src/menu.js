@@ -35,6 +35,7 @@ export const MENU = [
     id: "kasbank", label: "Kas & Bank", icon: Landmark, children: [
       { id: "kb-transaksi", label: "Penerimaan / Pembayaran" },
       { id: "kb-rekonsiliasi", label: "Rekonsiliasi Bank" },
+      { id: "kb-cekgiro", label: "Cek/Giro" },
     ],
   },
   {

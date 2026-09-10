@@ -338,3 +338,28 @@ fitur publik Accurate 5 Enterprise terhadap skema yang sudah ada. Style visual E
   /project-budgets/:projectId/realization`, `POST /project-budgets`.
 - Frontend: menu **Proyek & Departemen → RAB & Realisasi Biaya**
   (`frontend/src/pages/RAB.jsx`).
+
+### 9.5 Cek/Giro (Kas & Bank)
+
+- **cheque_giro**: no (CEK-xxxx/GIRO-xxxx via NumberingService), type: enum(cek, giro),
+  bank_account (teks bebas — nama bank/no rekening fisik cek/gironya, BUKAN akun GL),
+  amount, due_date, direction: enum(incoming, outgoing), status: enum(pending, cleared,
+  bounced), account_id (FK Account — akun Kas/Bank GL yang dipakai saat dicairkan),
+  partner_id (nullable), sales_invoice_id (wajib kalau direction=incoming),
+  purchase_invoice_id (wajib kalau direction=outgoing), company_id (nullable),
+  cash_transaction_id (nullable, unik).
+- Cek/Giro **selalu** tertaut ke faktur yang dilunasinya (mis. bagaimana cek/giro
+  dipakai di Indonesia: instrumen pembayaran untuk melunasi piutang/utang usaha yang
+  sudah tercatat, bukan transaksi baru).
+- **Alur pencairan** (`PATCH /cheque-giros/:id/clear`): hanya boleh saat status
+  `pending` DAN tanggal berjalan >= `due_date`. Begitu dicairkan, **tidak menulis
+  aturan jurnal baru** — memanggil `CashTransactionsService.create()` yang SUDAH ADA
+  (§4: `postCustomerReceipt`/`postSupplierPayment`), persis seperti pelunasan tunai
+  biasa, lalu menautkan `cash_transaction_id` dan set status `cleared` (ini juga yang
+  otomatis menandai faktur terkait `paid`, mengikuti perilaku `CashTransactionsService`
+  yang sudah ada).
+- **Ditolak bank** (`PATCH /cheque-giros/:id/bounce`): status → `bounced`, tidak
+  menyentuh jurnal sama sekali (uang memang tidak pernah berpindah).
+- Endpoint: `GET/POST /cheque-giros`, `PATCH /cheque-giros/:id/clear`,
+  `PATCH /cheque-giros/:id/bounce`.
+- Frontend: menu **Kas & Bank → Cek/Giro** (`frontend/src/pages/ChequeGiro.jsx`).

@@ -131,6 +131,23 @@ enum WorkOrderStatus {
   cancelled
 }
 
+// Kas & Bank §5 (gap module) — Cek/Giro.
+enum ChequeGiroType {
+  cek
+  giro
+}
+
+enum ChequeGiroDirection {
+  incoming
+  outgoing
+}
+
+enum ChequeGiroStatus {
+  pending
+  cleared
+  bounced
+}
+
 // ---------------------------------------------------------------------------
 // Auth / users
 // ---------------------------------------------------------------------------
@@ -194,6 +211,7 @@ model Company {
   purchaseReturns    PurchaseReturn[]
   salesReturns       SalesReturn[]
   bankStatementLines BankStatementLine[]
+  chequeGiros        ChequeGiro[]
 
   @@map("companies")
 }
@@ -220,6 +238,7 @@ model Partner {
   projects         Project[]
   cashTransactions CashTransaction[]
   basts            Bast[]
+  chequeGiros      ChequeGiro[]
 
   @@map("partners")
 }
@@ -425,6 +444,7 @@ model PurchaseInvoice {
 
   cashTransactions CashTransaction[]
   returns          PurchaseReturn[]
+  chequeGiros      ChequeGiro[]
 
   @@map("purchase_invoices")
 }
@@ -567,6 +587,7 @@ model SalesInvoice {
   basts            Bast[]
   cashTransactions CashTransaction[]
   returns          SalesReturn[]
+  chequeGiros      ChequeGiro[]
 
   @@index([projectId])
   @@map("sales_invoices")
@@ -959,6 +980,7 @@ model Account {
   cashTransactions   CashTransaction[]
   bankStatementLines BankStatementLine[]
   budgets            Budget[]
+  chequeGiros        ChequeGiro[]
 
   @@map("accounts")
 }
@@ -1040,6 +1062,7 @@ model CashTransaction {
   createdBy         Int?                @map("created_by")
 
   bankStatementLine BankStatementLine?
+  chequeGiro        ChequeGiro?
 
   @@map("cash_transactions")
 }
@@ -1115,4 +1138,45 @@ model ProjectBudgetLine {
   plannedAmount   BigInt        @map("planned_amount")
 
   @@map("project_budget_lines")
+}
+
+// Kas & Bank §5 (gap module) — Cek/Giro. Selalu tertaut ke faktur yang dilunasinya
+// (incoming -> sales_invoice, outgoing -> purchase_invoice) supaya "cleared" bisa
+// memakai CashTransactionsService yang SUDAH ADA (postCustomerReceipt/
+// postSupplierPayment, §4) alih-alih menulis aturan jurnal baru — cek/giro murni
+// instrumen pembayaran yang pencairannya tertunda, bukan jenis transaksi akuntansi
+// baru. bounced tidak menyentuh jurnal sama sekali (uang memang tidak pernah pindah).
+model ChequeGiro {
+  id          Int                 @id @default(autoincrement())
+  no          String              @unique
+  type        ChequeGiroType
+  bankAccount String              @map("bank_account")
+  amount      BigInt
+  dueDate     DateTime            @map("due_date")
+  direction   ChequeGiroDirection
+  status      ChequeGiroStatus    @default(pending)
+  // Akun Kas/Bank GL yang dipakai saat dicairkan (bukan bank_account di atas, yang
+  // cuma teks deskriptif nama bank/no rekening cek fisiknya).
+  accountId   Int                 @map("account_id")
+  account     Account             @relation(fields: [accountId], references: [id])
+  partnerId   Int?                @map("partner_id")
+  partner     Partner?            @relation(fields: [partnerId], references: [id])
+
+  salesInvoiceId    Int?             @map("sales_invoice_id")
+  salesInvoice      SalesInvoice?    @relation(fields: [salesInvoiceId], references: [id])
+  purchaseInvoiceId Int?             @map("purchase_invoice_id")
+  purchaseInvoice   PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
+
+  companyId         Int?             @map("company_id")
+  company           Company?         @relation(fields: [companyId], references: [id])
+  cashTransactionId Int?             @unique @map("cash_transaction_id")
+  cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id])
+
+  note      String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy Int?      @map("created_by")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("cheque_giros")
 }
