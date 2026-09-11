@@ -26,6 +26,7 @@ import ChequeGiro from "./pages/ChequeGiro";
 import BarangJasa from "./pages/BarangJasa";
 import Mitra from "./pages/Mitra";
 import PurchaseInvoiceList from "./pages/PurchaseInvoiceList";
+import DeliveryOrderList from "./pages/DeliveryOrderList";
 import { labelPath } from "./menu";
 
 function Shell() {
@@ -57,6 +58,7 @@ function Shell() {
     if (active === "st-pemasok") return <Mitra type="supplier" title="Pemasok" crumbs={["Pengaturan", "Pemasok"]} />;
     if (active === "st-pelanggan") return <Mitra type="customer" title="Pelanggan" crumbs={["Pengaturan", "Pelanggan"]} />;
     if (active === "pb-faktur") return <PurchaseInvoiceList />;
+    if (active === "pj-suratjalan") return <DeliveryOrderList />;
     const { crumbs, title } = labelPath(active);
     return <Placeholder title={title} crumbs={crumbs} />;
   };
