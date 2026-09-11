@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, PartnerType } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreatePartnerDto } from "./dto/create-partner.dto";
@@ -32,8 +32,24 @@ export class PartnersService {
     return this.prisma.partner.update({ where: { id }, data: dto });
   }
 
+  /**
+   * §10 data design, item 6 — tidak boleh menghapus mitra (pemasok/pelanggan)
+   * yang sudah punya transaksi tertaut, supaya riwayatnya tidak "kehilangan"
+   * pemasok/pelanggannya dari daftar aktif (mirip Accurate: master data yang
+   * sudah dipakai transaksi tidak bisa dihapus, hanya bisa dinonaktifkan).
+   */
   async remove(id: number) {
     await this.findOne(id);
+    const refCount = await this.prisma.$transaction([
+      this.prisma.purchaseOrder.count({ where: { supplierId: id, deletedAt: null } }),
+      this.prisma.salesOrder.count({ where: { customerId: id, deletedAt: null } }),
+      this.prisma.purchaseInvoice.count({ where: { supplierId: id, deletedAt: null } }),
+      this.prisma.salesInvoice.count({ where: { customerId: id, deletedAt: null } }),
+      this.prisma.project.count({ where: { customerId: id, deletedAt: null } }),
+    ]).then((counts) => counts.reduce((s, c) => s + c, 0));
+    if (refCount > 0) {
+      throw new BadRequestException("Mitra ini sudah dipakai di transaksi (PO/SO/faktur/proyek) — tidak bisa dihapus");
+    }
     await this.prisma.partner.update({ where: { id }, data: { deletedAt: new Date() } });
     return { ok: true };
   }

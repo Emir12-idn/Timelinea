@@ -35,8 +35,26 @@ export class JournalService {
     private numbering: NumberingService,
   ) {}
 
+  /**
+   * §10 data design, item 6 — tolak posting baru (termasuk pembalik, lewat
+   * reverseEntry) bertanggal di periode yang sudah ditutup (ClosedPeriodsService).
+   * Satu titik pengecekan di sini menutupi SEMUA jalur posting sekaligus, karena
+   * postEntry() adalah satu-satunya tempat baris jurnal ditulis (§4/prinsip "no
+   * man touch") — menambah dokumen transaksi baru otomatis ikut aturan ini tanpa
+   * perlu menyentuh modul lain.
+   */
+  private async assertPeriodOpen(date: Date, companyId: number | null | undefined, db: Prisma.TransactionClient | PrismaService) {
+    const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const closed = await db.closedPeriod.findFirst({ where: { period, companyId: { in: [0, companyId ?? 0] } } });
+    if (closed) {
+      throw new BadRequestException(`Periode ${period} sudah ditutup (tutup buku) — tidak bisa memposting jurnal baru di periode ini`);
+    }
+  }
+
   /** Runs inside the given transaction (or opens one) so the entry is atomic with its source document. */
   async postEntry(params: PostEntryParams, db: Prisma.TransactionClient | PrismaService = this.prisma) {
+    await this.assertPeriodOpen(params.date, params.companyId, db);
+
     const totalDebit = params.lines.reduce((sum, l) => sum + (l.debit ?? 0n), 0n);
     const totalCredit = params.lines.reduce((sum, l) => sum + (l.credit ?? 0n), 0n);
     if (totalDebit !== totalCredit) {
@@ -375,6 +393,7 @@ export class JournalService {
     if (original.voidedAt) {
       throw new BadRequestException(`Jurnal ${original.no} sudah pernah dibatalkan sebelumnya`);
     }
+    await this.assertPeriodOpen(date, original.companyId, db);
 
     const no = await this.numbering.next("JV", original.companyId, date, db);
     const reversal = await db.journalEntry.create({

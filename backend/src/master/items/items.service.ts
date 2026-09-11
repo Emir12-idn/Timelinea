@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateItemDto } from "./dto/create-item.dto";
@@ -56,8 +56,23 @@ export class ItemsService {
     });
   }
 
+  /**
+   * §10 data design, item 6 — tidak boleh menghapus barang/jasa yang sudah pernah
+   * dipakai di transaksi (mutasi stok atau baris dokumen manapun), supaya riwayat
+   * transaksi lama tidak kehilangan referensi barangnya dari daftar aktif.
+   */
   async remove(id: number) {
     await this.findOne(id);
+    const refCount = await this.prisma.$transaction([
+      this.prisma.stockMove.count({ where: { itemId: id } }),
+      this.prisma.purchaseOrderLine.count({ where: { itemId: id } }),
+      this.prisma.salesOrderLine.count({ where: { itemId: id } }),
+      this.prisma.deliveryOrderLine.count({ where: { itemId: id } }),
+      this.prisma.salesInvoiceLine.count({ where: { itemId: id } }),
+    ]).then((counts) => counts.reduce((s, c) => s + c, 0));
+    if (refCount > 0) {
+      throw new BadRequestException("Barang/jasa ini sudah pernah dipakai di transaksi — tidak bisa dihapus");
+    }
     await this.prisma.item.update({ where: { id }, data: { deletedAt: new Date() } });
     return { ok: true };
   }

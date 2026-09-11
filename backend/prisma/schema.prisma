@@ -1208,3 +1208,23 @@ model ChequeGiro {
 
   @@map("cheque_giros")
 }
+
+// §10 data design, item 6 — tutup buku periode. Belum ada mekanisme ini sebelumnya
+// (lihat komentar lama di ReportsService.neraca) padahal §2/§8 dokumen ini sudah
+// menyebut "tutup buku" sebagai bagian modul Buku Besar sejak awal. Menutup sebuah
+// periode mencegah JournalService.postEntry() memposting entry baru bertanggal di
+// periode itu (lihat pengecekannya di sana) — jadi enforcement-nya ada di SATU
+// titik yang sudah jadi gerbang semua posting otomatis, bukan tersebar di tiap
+// modul transaksi.
+model ClosedPeriod {
+  id        Int      @id @default(autoincrement())
+  // 0 = seluruh perusahaan — pola sama dengan Budget.companyId/Counter.companyId
+  // (NULL tidak unik di Postgres, unique constraint butuh kolom non-null).
+  companyId Int      @default(0) @map("company_id")
+  period    String // format YYYY-MM
+  closedAt  DateTime @default(now()) @map("closed_at")
+  closedBy  Int?     @map("closed_by")
+
+  @@unique([companyId, period])
+  @@map("closed_periods")
+}
