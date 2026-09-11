@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Res, UseGuards } from "@nestjs/common";
+import { Response } from "express";
 import { Role } from "@prisma/client";
 import { WarehousesService } from "./warehouses.service";
 import { CreateWarehouseDto } from "./dto/create-warehouse.dto";
@@ -17,6 +18,13 @@ export class WarehousesController {
   @Get()
   findAll() {
     return this.service.findAll();
+  }
+
+  @Get("export/csv")
+  async exportCsv(@Res() res: Response) {
+    const csv = await this.service.exportCsv();
+    res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="warehouses.csv"' });
+    res.send(csv);
   }
 
   @Get(":id")

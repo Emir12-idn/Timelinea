@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { toCsv } from "../../common/csv.util";
 import { CreateWarehouseDto } from "./dto/create-warehouse.dto";
 import { UpdateWarehouseDto } from "./dto/update-warehouse.dto";
+
+const WAREHOUSE_EXPORT_COLUMNS = ["code", "name", "address", "isDefault"];
 
 @Injectable()
 export class WarehousesService {
@@ -9,6 +12,19 @@ export class WarehousesService {
 
   findAll() {
     return this.prisma.warehouse.findMany({ where: { deletedAt: null }, orderBy: { code: "asc" } });
+  }
+
+  /**
+   * §14 data design (pass keenam), item 4 (Part B CSV sweep) — round-1 module
+   * (§9.1) the round-3 CSV pass (§11.4) never reached (Item/Partner/
+   * PurchaseInvoice/SalesInvoice/StockMove only). Export-only (no import):
+   * the warehouse list is short/rarely-changing master data, so a bulk-edit-
+   * then-import flow isn't worth building — a plain read-only export for
+   * reference/backup is the useful part (judgment call, see final report).
+   */
+  async exportCsv(): Promise<string> {
+    const warehouses = await this.findAll();
+    return toCsv(warehouses, WAREHOUSE_EXPORT_COLUMNS);
   }
 
   async findOne(id: number) {

@@ -186,7 +186,10 @@ export default function Persediaan() {
       )}
 
       <Card className="mb-4 overflow-hidden">
-        <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Daftar Gudang</div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+          <div className="text-sm font-semibold text-slate-700">Daftar Gudang</div>
+          <ImportExportBar exportPath="/warehouses/export/csv" exportFilename="warehouses.csv" />
+        </div>
         {warehousesApi.loading ? <Spinner /> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
