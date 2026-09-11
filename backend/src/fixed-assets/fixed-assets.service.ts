@@ -3,6 +3,7 @@ import { DepreciationMethod, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { JournalService } from "../accounting/journal/journal.service";
 import { minBigInt } from "../common/money.util";
+import { AuditLogService } from "../common/audit-log/audit-log.service";
 import { CreateFixedAssetDto } from "./dto/create-fixed-asset.dto";
 
 @Injectable()
@@ -10,6 +11,7 @@ export class FixedAssetsService {
   constructor(
     private prisma: PrismaService,
     private journal: JournalService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll() {
@@ -152,6 +154,21 @@ export class FixedAssetsService {
           period,
           tx,
           createdBy,
+        );
+        // §12 data design — penyusutan adalah kalkulasi keuangan yang mengubah
+        // bookValue tiap aset, satu baris audit per aset per periode (bukan satu
+        // baris untuk seluruh batch run) supaya riwayat tiap aset tetap bisa
+        // ditelusuri lewat GET /audit-log?entityType=fixed_asset&entityId=.
+        await this.auditLog.record(
+          {
+            actorId: createdBy,
+            action: "depreciation_run",
+            entityType: "fixed_asset",
+            entityId: asset.id,
+            before: { bookValue: asset.bookValue, accumulatedDepreciation: asset.accumulatedDepreciation },
+            after: { bookValue: asset2.bookValue, accumulatedDepreciation: asset2.accumulatedDepreciation, period },
+          },
+          tx,
         );
         return asset2;
       });

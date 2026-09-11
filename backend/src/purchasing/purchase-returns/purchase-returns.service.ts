@@ -5,6 +5,7 @@ import { lineAmount, percentOf } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { COA_CODE } from "../../accounting/journal/coa-codes";
 import { CostingService } from "../../inventory/costing.service";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreatePurchaseReturnDto } from "./dto/create-purchase-return.dto";
 
 const PPN_RATE = 0.11;
@@ -27,6 +28,7 @@ export class PurchaseReturnsService {
     private numbering: NumberingService,
     private journal: JournalService,
     private costing: CostingService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll() {
@@ -112,6 +114,14 @@ export class PurchaseReturnsService {
         tx,
         createdBy,
         creditAccountCode,
+      );
+
+      // §12 data design — retur pembelian selalu langsung posting begitu dibuat
+      // (tidak ada status draft), sama seperti Faktur Pembelian — "create" di sini
+      // SEKALIGUS "post".
+      await this.auditLog.record(
+        { actorId: createdBy, action: "post", entityType: "purchase_return", entityId: ret.id, after: ret },
+        tx,
       );
 
       return ret;

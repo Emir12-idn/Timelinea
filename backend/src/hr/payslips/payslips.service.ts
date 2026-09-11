@@ -5,6 +5,7 @@ import { percentOf, minBigInt } from "../../common/money.util";
 import { PdfService } from "../../printing/pdf.service";
 import { slipGajiHtml } from "../../printing/templates/slip-gaji.template";
 import { displayName } from "../../auth/role-label.util";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { GeneratePayslipDto } from "./dto/generate-payslip.dto";
 
 const DEFAULT_ALLOWANCE = 750_000n;
@@ -16,6 +17,7 @@ export class PayslipsService {
     private prisma: PrismaService,
     private journal: JournalService,
     private pdf: PdfService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll(employeeId?: number, period?: string) {
@@ -129,6 +131,15 @@ export class PayslipsService {
         dto.companyId ?? null,
         tx,
         createdBy,
+      );
+
+      // §12 data design — slip gaji selalu langsung posting begitu di-generate
+      // (tidak ada status draft, sama seperti Faktur Pembelian/Penjualan), jadi
+      // "generate" di sini SEKALIGUS "post" — perhitungan uang (gross/potongan/
+      // net) adalah persis jenis aksi yang wajib punya audit trail (§12 tugas ini).
+      await this.auditLog.record(
+        { actorId: createdBy, action: "post", entityType: "payslip", entityId: payslip.id, after: payslip },
+        tx,
       );
 
       return payslip;

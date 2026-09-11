@@ -27,8 +27,8 @@ export class BastsController {
   }
 
   @Get(":id/print")
-  async print(@Param("id", ParseIntPipe) id: number, @Res() res: Response) {
-    const pdf = await this.service.renderPdf(id);
+  async print(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: AuthUser, @Res() res: Response) {
+    const pdf = await this.service.renderPdf(id, user.id);
     res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="bast-${id}.pdf"` });
     res.send(pdf);
   }

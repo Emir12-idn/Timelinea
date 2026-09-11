@@ -29,12 +29,12 @@ export class BankReconciliationController {
   }
 
   @Patch(":id/match")
-  match(@Param("id", ParseIntPipe) id: number, @Body() dto: MatchStatementLineDto) {
-    return this.service.match(id, dto.cashTransactionId);
+  match(@Param("id", ParseIntPipe) id: number, @Body() dto: MatchStatementLineDto, @CurrentUser() user: AuthUser) {
+    return this.service.match(id, dto.cashTransactionId, user.id);
   }
 
   @Patch(":id/unmatch")
-  unmatch(@Param("id", ParseIntPipe) id: number) {
-    return this.service.unmatch(id);
+  unmatch(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    return this.service.unmatch(id, user.id);
   }
 }

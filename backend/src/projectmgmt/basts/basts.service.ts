@@ -3,6 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
 import { PdfService } from "../../printing/pdf.service";
 import { bastHtml } from "../../printing/templates/bast.template";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreateBastDto } from "./dto/create-bast.dto";
 
 @Injectable()
@@ -11,6 +12,7 @@ export class BastsService {
     private prisma: PrismaService,
     private numbering: NumberingService,
     private pdf: PdfService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll() {
@@ -52,7 +54,7 @@ export class BastsService {
     }
 
     const no = await this.numbering.next("BAST");
-    return this.prisma.bast.create({
+    const bast = await this.prisma.bast.create({
       data: {
         no,
         date,
@@ -65,11 +67,25 @@ export class BastsService {
       },
       include: { lines: true },
     });
+    // §12 data design — BAST adalah dokumen serah terima resmi ke pelanggan
+    // (tanda tangan dua pihak), jadi pembuatannya dicatat di audit trail sama
+    // seperti dokumen transaksi lain yang sudah dipasangi (§11.6).
+    await this.auditLog.record({ actorId: createdBy, action: "create", entityType: "bast", entityId: bast.id, after: bast });
+    return bast;
   }
 
-  async renderPdf(id: number): Promise<Buffer> {
+  /**
+   * §12 data design — cetak BAST dicatat juga (bukan cuma create): BAST yang
+   * dicetak ulang berarti ada salinan fisik baru beredar untuk ditandatangani/
+   * diserahkan, dan itu relevan secara audit sama seperti pembuatannya — beda
+   * dari cetak PO/Faktur/Slip Gaji yang lebih sering cuma untuk arsip internal.
+   */
+  async renderPdf(id: number, actorId?: number): Promise<Buffer> {
     const bast = await this.findOne(id);
     const html = bastHtml(bast);
+    if (actorId !== undefined) {
+      await this.auditLog.record({ actorId, action: "print", entityType: "bast", entityId: id });
+    }
     return this.pdf.renderHtmlToPdf(html);
   }
 }

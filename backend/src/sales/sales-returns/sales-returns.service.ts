@@ -4,6 +4,7 @@ import { NumberingService } from "../../common/numbering.service";
 import { lineAmount, percentOf } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { CostingService } from "../../inventory/costing.service";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreateSalesReturnDto } from "./dto/create-sales-return.dto";
 
 const PPN_RATE = 0.11;
@@ -26,6 +27,7 @@ export class SalesReturnsService {
     private numbering: NumberingService,
     private journal: JournalService,
     private costing: CostingService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll() {
@@ -115,6 +117,14 @@ export class SalesReturnsService {
         { id: ret.id, no, date, dpp, ppn, total, companyId: dto.companyId ?? null },
         tx,
         createdBy,
+      );
+
+      // §12 data design — retur penjualan selalu langsung posting begitu dibuat
+      // (tidak ada status draft), sama seperti Faktur Penjualan — "create" di sini
+      // SEKALIGUS "post".
+      await this.auditLog.record(
+        { actorId: createdBy, action: "post", entityType: "sales_return", entityId: ret.id, after: ret },
+        tx,
       );
 
       return ret;

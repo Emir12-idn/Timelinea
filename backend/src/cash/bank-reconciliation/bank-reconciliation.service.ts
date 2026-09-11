@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreateStatementLineDto } from "./dto/create-statement-line.dto";
 import { ListStatementLinesDto } from "./dto/list-statement-lines.dto";
 
@@ -12,7 +13,10 @@ import { ListStatementLinesDto } from "./dto/list-statement-lines.dto";
  */
 @Injectable()
 export class BankReconciliationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLog: AuditLogService,
+  ) {}
 
   createLine(dto: CreateStatementLineDto, createdBy?: number) {
     return this.prisma.bankStatementLine.create({
@@ -39,7 +43,7 @@ export class BankReconciliationService {
     });
   }
 
-  async match(id: number, cashTransactionId: number) {
+  async match(id: number, cashTransactionId: number, actorId?: number) {
     const line = await this.prisma.bankStatementLine.findUnique({ where: { id } });
     if (!line) throw new NotFoundException("Baris rekening koran tidak ditemukan");
     if (line.cashTransactionId) throw new BadRequestException("Baris ini sudah dicocokkan");
@@ -61,13 +65,35 @@ export class BankReconciliationService {
       );
     }
 
-    return this.prisma.bankStatementLine.update({ where: { id }, data: { cashTransactionId } });
+    const updated = await this.prisma.bankStatementLine.update({ where: { id }, data: { cashTransactionId } });
+    // §12 data design — cocok/batal-cocok rekonsiliasi bank tidak menyentuh
+    // jurnal (murni alat pencocokan, lihat komentar kelas di atas), tapi tetap
+    // mengubah status pencocokan sebuah dokumen — dicatat sama seperti aksi
+    // status-berubah lain di §11.6.
+    await this.auditLog.record({
+      actorId,
+      action: "match",
+      entityType: "bank_statement_line",
+      entityId: id,
+      before: { cashTransactionId: null },
+      after: { cashTransactionId: updated.cashTransactionId },
+    });
+    return updated;
   }
 
-  async unmatch(id: number) {
+  async unmatch(id: number, actorId?: number) {
     const line = await this.prisma.bankStatementLine.findUnique({ where: { id } });
     if (!line) throw new NotFoundException("Baris rekening koran tidak ditemukan");
-    return this.prisma.bankStatementLine.update({ where: { id }, data: { cashTransactionId: null } });
+    const updated = await this.prisma.bankStatementLine.update({ where: { id }, data: { cashTransactionId: null } });
+    await this.auditLog.record({
+      actorId,
+      action: "unmatch",
+      entityType: "bank_statement_line",
+      entityId: id,
+      before: { cashTransactionId: line.cashTransactionId },
+      after: { cashTransactionId: null },
+    });
+    return updated;
   }
 
   async summary(accountId: number, asOf?: Date) {
