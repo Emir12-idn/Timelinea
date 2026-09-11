@@ -5,6 +5,7 @@ import { convertToBase, dppFromTotal } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { COA_CODE } from "../../accounting/journal/coa-codes";
 import { CostingService } from "../../inventory/costing.service";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreatePurchaseInvoiceDto } from "./dto/create-purchase-invoice.dto";
 
 @Injectable()
@@ -14,6 +15,7 @@ export class PurchaseInvoicesService {
     private numbering: NumberingService,
     private journal: JournalService,
     private costing: CostingService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll() {
@@ -130,6 +132,14 @@ export class PurchaseInvoicesService {
         debitAccountCode,
       );
 
+      // §11 data design, item 6 — audit trail: faktur pembelian selalu langsung
+      // posting begitu dibuat (tidak ada status draft), jadi "create" di sini
+      // SEKALIGUS "post".
+      await this.auditLog.record(
+        { actorId: createdBy, action: "post", entityType: "purchase_invoice", entityId: invoice.id, after: invoice },
+        tx,
+      );
+
       return invoice;
     });
   }
@@ -190,7 +200,19 @@ export class PurchaseInvoicesService {
         await tx.purchaseOrder.update({ where: { id: invoice.poId }, data: { status: "sent" } });
       }
 
-      return tx.purchaseInvoice.update({ where: { id }, data: { status: "void" } });
+      const voided = await tx.purchaseInvoice.update({ where: { id }, data: { status: "void" } });
+      await this.auditLog.record(
+        {
+          actorId: createdBy,
+          action: "void",
+          entityType: "purchase_invoice",
+          entityId: id,
+          before: { status: invoice.status },
+          after: { status: voided.status },
+        },
+        tx,
+      );
+      return voided;
     });
   }
 }

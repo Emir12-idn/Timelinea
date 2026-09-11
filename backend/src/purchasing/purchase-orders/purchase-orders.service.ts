@@ -6,6 +6,7 @@ import { lineAmount } from "../../common/money.util";
 import { PdfService } from "../../printing/pdf.service";
 import { purchaseOrderHtml } from "../../printing/templates/purchase-order.template";
 import { displayName } from "../../auth/role-label.util";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreatePurchaseOrderDto } from "./dto/create-purchase-order.dto";
 import { UpdatePurchaseOrderDto } from "./dto/update-purchase-order.dto";
 
@@ -29,6 +30,7 @@ export class PurchaseOrdersService {
     private prisma: PrismaService,
     private numbering: NumberingService,
     private pdf: PdfService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll(status?: PoStatus) {
@@ -108,7 +110,7 @@ export class PurchaseOrdersService {
     });
   }
 
-  async updateStatus(id: number, status: PoStatus) {
+  async updateStatus(id: number, status: PoStatus, actorId?: number) {
     const po = await this.findOne(id);
     if (!ALLOWED_TRANSITIONS[po.status].includes(status)) {
       throw new BadRequestException(`Tidak bisa mengubah status PO dari "${po.status}" ke "${status}"`);
@@ -119,7 +121,17 @@ export class PurchaseOrdersService {
     if (status === "sent" && !po.approvedBy) {
       throw new BadRequestException(`PO ${po.no} belum di-approve — approve dulu sebelum dikirim ke pemasok`);
     }
-    return this.prisma.purchaseOrder.update({ where: { id }, data: { status } });
+    const updated = await this.prisma.purchaseOrder.update({ where: { id }, data: { status } });
+    // §11 data design, item 6 — audit trail di titik status berubah.
+    await this.auditLog.record({
+      actorId,
+      action: status === "cancelled" ? "cancel" : "status_change",
+      entityType: "purchase_order",
+      entityId: id,
+      before: { status: po.status },
+      after: { status: updated.status },
+    });
+    return updated;
   }
 
   /**
@@ -135,10 +147,19 @@ export class PurchaseOrdersService {
     if (po.approvedBy) {
       throw new BadRequestException(`PO ${po.no} sudah di-approve sebelumnya`);
     }
-    return this.prisma.purchaseOrder.update({
+    const updated = await this.prisma.purchaseOrder.update({
       where: { id },
       data: { approvedBy, approvedAt: new Date() },
     });
+    await this.auditLog.record({
+      actorId: approvedBy,
+      action: "approve",
+      entityType: "purchase_order",
+      entityId: id,
+      before: { approvedBy: null },
+      after: { approvedBy: updated.approvedBy, approvedAt: updated.approvedAt },
+    });
+    return updated;
   }
 
   async renderPdf(id: number): Promise<Buffer> {

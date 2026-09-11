@@ -7,6 +7,7 @@ import { SalesInvoicesService } from "../sales/sales-invoices/sales-invoices.ser
 import { PurchaseInvoicesService } from "../purchasing/purchase-invoices/purchase-invoices.service";
 import { CreateSalesInvoiceDto } from "../sales/sales-invoices/dto/create-sales-invoice.dto";
 import { CreatePurchaseInvoiceDto } from "../purchasing/purchase-invoices/dto/create-purchase-invoice.dto";
+import { AuditLogService } from "../common/audit-log/audit-log.service";
 import { CreateRecurringTemplateDto } from "./dto/create-recurring-template.dto";
 import { UpdateRecurringTemplateDto } from "./dto/update-recurring-template.dto";
 
@@ -25,6 +26,7 @@ export class RecurringTemplatesService {
     private prisma: PrismaService,
     private salesInvoices: SalesInvoicesService,
     private purchaseInvoices: PurchaseInvoicesService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll(isActive?: boolean) {
@@ -183,13 +185,33 @@ export class RecurringTemplatesService {
       where: { id },
       data: { status: "confirmed", confirmedRefId: document.id, confirmedAt: new Date(), confirmedBy },
     });
+    // §11 data design, item 6 — the actual document's own create() already wrote
+    // its own "post" audit row; this one is for the draft->confirmed transition
+    // itself (a distinct, meaningful state change on a different entity).
+    await this.auditLog.record({
+      actorId: confirmedBy,
+      action: "confirm",
+      entityType: "recurring_generated_draft",
+      entityId: id,
+      before: { status: "pending" },
+      after: { status: "confirmed", confirmedRefId: document.id },
+    });
     return document;
   }
 
-  async discardDraft(id: number) {
+  async discardDraft(id: number, actorId?: number) {
     const draft = await this.prisma.recurringGeneratedDraft.findUnique({ where: { id } });
     if (!draft) throw new NotFoundException("Draft transaksi berulang tidak ditemukan");
     if (draft.status !== "pending") throw new BadRequestException(`Draft ini sudah berstatus "${draft.status}"`);
-    return this.prisma.recurringGeneratedDraft.update({ where: { id }, data: { status: "discarded" } });
+    const updated = await this.prisma.recurringGeneratedDraft.update({ where: { id }, data: { status: "discarded" } });
+    await this.auditLog.record({
+      actorId,
+      action: "discard",
+      entityType: "recurring_generated_draft",
+      entityId: id,
+      before: { status: "pending" },
+      after: { status: "discarded" },
+    });
+    return updated;
   }
 }

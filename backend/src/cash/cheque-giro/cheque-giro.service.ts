@@ -3,6 +3,7 @@ import { ChequeGiroStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
 import { CashTransactionsService } from "../cash-transactions.service";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreateChequeGiroDto } from "./dto/create-cheque-giro.dto";
 
 const CG_INCLUDE = { account: true, partner: true, salesInvoice: true, purchaseInvoice: true, cashTransaction: true } as const;
@@ -20,6 +21,7 @@ export class ChequeGiroService {
     private prisma: PrismaService,
     private numbering: NumberingService,
     private cashTransactions: CashTransactionsService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll(status?: ChequeGiroStatus, direction?: "incoming" | "outgoing") {
@@ -93,16 +95,34 @@ export class ChequeGiroService {
       createdBy,
     );
 
-    return this.prisma.chequeGiro.update({
+    const updated = await this.prisma.chequeGiro.update({
       where: { id },
       data: { status: "cleared", cashTransactionId: cashTx.id },
       include: CG_INCLUDE,
     });
+    await this.auditLog.record({
+      actorId: createdBy,
+      action: "clear",
+      entityType: "cheque_giro",
+      entityId: id,
+      before: { status: cg.status },
+      after: { status: updated.status, cashTransactionId: updated.cashTransactionId },
+    });
+    return updated;
   }
 
-  async markBounced(id: number) {
+  async markBounced(id: number, actorId?: number) {
     const cg = await this.findOne(id);
     if (cg.status !== "pending") throw new BadRequestException(`Cek/Giro berstatus "${cg.status}", tidak bisa ditolak`);
-    return this.prisma.chequeGiro.update({ where: { id }, data: { status: "bounced" }, include: CG_INCLUDE });
+    const updated = await this.prisma.chequeGiro.update({ where: { id }, data: { status: "bounced" }, include: CG_INCLUDE });
+    await this.auditLog.record({
+      actorId,
+      action: "bounce",
+      entityType: "cheque_giro",
+      entityId: id,
+      before: { status: cg.status },
+      after: { status: updated.status },
+    });
+    return updated;
   }
 }

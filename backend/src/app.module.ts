@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { PrismaModule } from "./prisma/prisma.module";
 import { CommonModule } from "./common/common.module";
+import { AuditLogModule } from "./common/audit-log/audit-log.module";
 import { PrintingModule } from "./printing/printing.module";
 import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
@@ -46,6 +47,7 @@ import { RecurringTemplatesModule } from "./recurring/recurring-templates.module
   imports: [
     PrismaModule,
     CommonModule,
+    AuditLogModule,
     PrintingModule,
     JournalModule,
     AuthModule,

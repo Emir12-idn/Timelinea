@@ -54,7 +54,7 @@ export class RecurringTemplatesController {
   }
 
   @Post("drafts/:id/discard")
-  discardDraft(@Param("id", ParseIntPipe) id: number) {
-    return this.service.discardDraft(id);
+  discardDraft(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    return this.service.discardDraft(id, user.id);
   }
 }

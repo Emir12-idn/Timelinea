@@ -26,7 +26,7 @@ export class ClosedPeriodsController {
 
   @Roles(Role.admin, Role.hrd_keuangan)
   @Delete(":id")
-  reopen(@Param("id", ParseIntPipe) id: number) {
-    return this.service.reopen(id);
+  reopen(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    return this.service.reopen(id, user.id);
   }
 }

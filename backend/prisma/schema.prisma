@@ -1279,6 +1279,29 @@ model ClosedPeriod {
   @@map("closed_periods")
 }
 
+// §11 data design, item 6 — audit trail generik. Ditulis oleh SATU service
+// bersama (AuditLogService.record(), lihat common/audit-log/) yang dipanggil dari
+// tiap service YANG SUDAH ADA di titik status dokumen berubah (post/void/approve/
+// cancel/dll) — bukan interceptor level-ORM yang mencatat SETIAP edit field (itu
+// berlebihan untuk cakupan ini, lihat instruksi tugas).
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int?     @map("actor_id")
+  // Kata kerja bebas (mis. "post", "void", "approve", "reject", "cancel",
+  // "confirm", "close", "reopen", "clear", "bounce") — tidak di-enum-kan supaya
+  // menambah jenis aksi baru tidak perlu migrasi skema, konsisten dengan
+  // JournalEntry.type/refType yang juga string bebas.
+  action     String
+  entityType String   @map("entity_type")
+  entityId   Int      @map("entity_id")
+  before     Json?
+  after      Json?
+  at         DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
 // §11 data design, item 3 — transaksi berulang. Template tersimpan (`payload` =
 // body DTO create sales/purchase invoice APA ADANYA, tanpa `date` — diisi dari
 // `nextRunDate` tiap kali generate) yang di-generate ulang sesuai `frequency`.

@@ -5,6 +5,7 @@ import { NumberingService } from "../../common/numbering.service";
 import { lineAmount } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { CostingService } from "../../inventory/costing.service";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreateWorkOrderDto } from "./dto/create-work-order.dto";
 
 const WO_INCLUDE = { productItem: true, bom: { include: { lines: { include: { materialItem: true } } } }, warehouse: true, project: true } as const;
@@ -31,6 +32,7 @@ export class WorkOrdersService {
     private numbering: NumberingService,
     private journal: JournalService,
     private costing: CostingService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll(status?: WorkOrderStatus, projectId?: number) {
@@ -79,7 +81,16 @@ export class WorkOrdersService {
       throw new BadRequestException(`Tidak bisa mengubah status dari "${wo.status}" ke "${status}"`);
     }
     if (status !== "done") {
-      return this.prisma.workOrder.update({ where: { id }, data: { status }, include: WO_INCLUDE });
+      const updated = await this.prisma.workOrder.update({ where: { id }, data: { status }, include: WO_INCLUDE });
+      await this.auditLog.record({
+        actorId: createdBy,
+        action: status === "cancelled" ? "cancel" : "status_change",
+        entityType: "work_order",
+        entityId: id,
+        before: { status: wo.status },
+        after: { status: updated.status },
+      });
+      return updated;
     }
 
     const plannedQty = wo.plannedQty;
@@ -126,7 +137,19 @@ export class WorkOrdersService {
         );
       }
 
-      return tx.workOrder.update({ where: { id: wo.id }, data: { status: "done" }, include: WO_INCLUDE });
+      const done = await tx.workOrder.update({ where: { id: wo.id }, data: { status: "done" }, include: WO_INCLUDE });
+      await this.auditLog.record(
+        {
+          actorId: createdBy,
+          action: "post",
+          entityType: "work_order",
+          entityId: id,
+          before: { status: wo.status },
+          after: { status: done.status, materialCost, conversionCost, fgUnitCost },
+        },
+        tx,
+      );
+      return done;
     });
   }
 

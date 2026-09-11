@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { JournalService } from "../../accounting/journal/journal.service";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreateCashAdvanceDto } from "./dto/create-cash-advance.dto";
 
 @Injectable()
@@ -8,6 +9,7 @@ export class CashAdvancesService {
   constructor(
     private prisma: PrismaService,
     private journal: JournalService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll(employeeId?: number) {
@@ -43,10 +45,19 @@ export class CashAdvancesService {
       throw new BadRequestException("Kasbon ini sudah melewati tahap persetujuan atasan");
     }
 
-    if (decision === "rejected") {
-      return this.prisma.cashAdvance.update({ where: { id }, data: { status: "rejected", approvedBy: decidedBy } });
-    }
-    return this.prisma.cashAdvance.update({ where: { id }, data: { status: "tier1_approved", tier1By: decidedBy } });
+    const updated =
+      decision === "rejected"
+        ? await this.prisma.cashAdvance.update({ where: { id }, data: { status: "rejected", approvedBy: decidedBy } })
+        : await this.prisma.cashAdvance.update({ where: { id }, data: { status: "tier1_approved", tier1By: decidedBy } });
+    await this.auditLog.record({
+      actorId: decidedBy,
+      action: decision === "rejected" ? "reject" : "approve",
+      entityType: "cash_advance",
+      entityId: id,
+      before: { status: advance.status },
+      after: { status: updated.status },
+    });
+    return updated;
   }
 
   /**
@@ -63,7 +74,16 @@ export class CashAdvancesService {
     if (advance.status !== "tier1_approved") throw new BadRequestException("Kasbon ini sudah diproses");
 
     if (decision === "rejected") {
-      return this.prisma.cashAdvance.update({ where: { id }, data: { status: "rejected", approvedBy } });
+      const rejected = await this.prisma.cashAdvance.update({ where: { id }, data: { status: "rejected", approvedBy } });
+      await this.auditLog.record({
+        actorId: approvedBy,
+        action: "reject",
+        entityType: "cash_advance",
+        entityId: id,
+        before: { status: advance.status },
+        after: { status: rejected.status },
+      });
+      return rejected;
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -72,6 +92,17 @@ export class CashAdvancesService {
         data: { status: "approved", approvedBy, remaining: advance.amount },
       });
       await this.journal.postCashAdvanceApproval({ id: updated.id, date: updated.date, amount: updated.amount }, null, tx, approvedBy);
+      await this.auditLog.record(
+        {
+          actorId: approvedBy,
+          action: "approve",
+          entityType: "cash_advance",
+          entityId: id,
+          before: { status: advance.status },
+          after: { status: updated.status },
+        },
+        tx,
+      );
       return updated;
     });
   }

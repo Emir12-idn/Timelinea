@@ -37,8 +37,8 @@ export class PurchaseOrdersController {
   }
 
   @Patch(":id/status")
-  updateStatus(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdatePoStatusDto) {
-    return this.service.updateStatus(id, dto.status);
+  updateStatus(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdatePoStatusDto, @CurrentUser() user: AuthUser) {
+    return this.service.updateStatus(id, dto.status, user.id);
   }
 
   /** §11 data design, item 5 — approval workflow, single-level (admin/hrd_keuangan). */

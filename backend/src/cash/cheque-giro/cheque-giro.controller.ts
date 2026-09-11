@@ -37,7 +37,7 @@ export class ChequeGiroController {
 
   @Roles(Role.admin, Role.hrd_keuangan)
   @Patch(":id/bounce")
-  markBounced(@Param("id", ParseIntPipe) id: number) {
-    return this.service.markBounced(id);
+  markBounced(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    return this.service.markBounced(id, user.id);
   }
 }

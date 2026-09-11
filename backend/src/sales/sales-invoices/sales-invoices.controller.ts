@@ -31,7 +31,7 @@ export class SalesInvoicesController {
 
   @Patch(":id/status")
   updateStatus(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdateSalesInvoiceStatusDto, @CurrentUser() user: AuthUser) {
-    return this.service.updateStatus(id, dto.status, user.displayName);
+    return this.service.updateStatus(id, dto.status, user.displayName, user.id);
   }
 
   @Patch(":id/void")

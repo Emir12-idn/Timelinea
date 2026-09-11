@@ -6,6 +6,7 @@ import { JournalService } from "../../accounting/journal/journal.service";
 import { PdfService } from "../../printing/pdf.service";
 import { fakturPenjualanHtml } from "../../printing/templates/faktur-penjualan.template";
 import { displayName } from "../../auth/role-label.util";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { CreateSalesInvoiceDto } from "./dto/create-sales-invoice.dto";
 import { ValidateFieldsDto } from "./dto/validate-fields.dto";
 import { SalesInvoiceStatus } from "@prisma/client";
@@ -31,6 +32,7 @@ export class SalesInvoicesService {
     private numbering: NumberingService,
     private journal: JournalService,
     private pdf: PdfService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll(status?: SalesInvoiceStatus) {
@@ -137,11 +139,20 @@ export class SalesInvoicesService {
         createdBy,
       );
 
+      // §11 data design, item 6 — audit trail: faktur penjualan juga selalu
+      // langsung posting begitu dibuat, apapun status awalnya (draft) — lihat
+      // catatan panjang soal ini di RecurringTemplate (recurring/recurring-
+      // templates.service.ts).
+      await this.auditLog.record(
+        { actorId: createdBy, action: "post", entityType: "sales_invoice", entityId: invoice.id, after: invoice },
+        tx,
+      );
+
       return invoice;
     });
   }
 
-  async updateStatus(id: number, status: SalesInvoiceStatus, authorName = "system") {
+  async updateStatus(id: number, status: SalesInvoiceStatus, authorName = "system", actorId?: number) {
     const invoice = await this.findOne(id);
     if (status === "void") {
       throw new BadRequestException(
@@ -151,10 +162,19 @@ export class SalesInvoicesService {
     if (!ALLOWED_TRANSITIONS[invoice.status].includes(status)) {
       throw new BadRequestException(`Tidak bisa mengubah status faktur dari "${invoice.status}" ke "${status}"`);
     }
-    return this.prisma.salesInvoice.update({
+    const updated = await this.prisma.salesInvoice.update({
       where: { id },
       data: { status, logs: { create: { action: "status_change", status, author: authorName } } },
     });
+    await this.auditLog.record({
+      actorId,
+      action: "status_change",
+      entityType: "sales_invoice",
+      entityId: id,
+      before: { status: invoice.status },
+      after: { status: updated.status },
+    });
+    return updated;
   }
 
   /**
@@ -192,10 +212,22 @@ export class SalesInvoicesService {
       if (entry) {
         await this.journal.reverseEntry(entry.id, new Date(), tx, createdBy);
       }
-      return tx.salesInvoice.update({
+      const voided = await tx.salesInvoice.update({
         where: { id },
         data: { status: "void", logs: { create: { action: "void", status: "void", author: authorName } } },
       });
+      await this.auditLog.record(
+        {
+          actorId: createdBy,
+          action: "void",
+          entityType: "sales_invoice",
+          entityId: id,
+          before: { status: invoice.status },
+          after: { status: voided.status },
+        },
+        tx,
+      );
+      return voided;
     });
   }
 
