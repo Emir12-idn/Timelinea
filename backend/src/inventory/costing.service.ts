@@ -82,6 +82,24 @@ export class CostingService {
     return BigInt(new Prisma.Decimal(value.toString()).div(qty).toDecimalPlaces(0).toFixed(0));
   }
 
+  /**
+   * Biaya pada saat barang TERAKHIR dikeluarkan (stock-out) dari gudang ini, pada
+   * atau sebelum tanggal acuan — dipakai untuk restock retur penjualan pada biaya
+   * SAAT BARANG ITU DIJUAL (§10 data design, judgment call sebelumnya memakai
+   * `item.lastCost`, yang sebenarnya biaya pembelian/produksi TERAKHIR, field sisi
+   * masuk — bukan biaya keluar saat itemnya diserahkan, jadi tidak tepat untuk
+   * retur). Fallback ke rata-rata berjalan kalau item ini belum pernah keluar dari
+   * gudang tsb (mis. retur pertama untuk item itu).
+   */
+  async lastIssueCost(db: Db, itemId: number, warehouseId: number, onOrBefore: Date): Promise<bigint> {
+    const move = await db.stockMove.findFirst({
+      where: { itemId, warehouseId, qtyOut: { gt: 0 }, date: { lte: onOrBefore } },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
+    });
+    if (move?.unitCost != null) return move.unitCost;
+    return this.averageCost(db, itemId, warehouseId);
+  }
+
   /** Konsumsi layer FIFO tertua dulu; mengembalikan biaya rata-rata tertimbang dari qty yang benar-benar terkonsumsi. */
   private async consumeFifoLayers(db: Db, itemId: number, warehouseId: number, qty: Prisma.Decimal): Promise<bigint> {
     let remaining = qty;
@@ -97,9 +115,10 @@ export class CostingService {
       remaining = remaining.minus(take);
       await db.stockLayer.update({ where: { id: layer.id }, data: { qtyRemaining: layer.qtyRemaining.minus(take) } });
     }
-    // Kalau layer tidak cukup (stok negatif / data lama tanpa layer), sisanya dianggap
-    // berbiaya 0 — tidak menghentikan transaksi, konsisten dengan stok yang memang
-    // sudah dihitung dari mutasi apa adanya (bisa negatif kalau ada salah input).
+    // stockOut() sudah menolak permintaan yang melebihi on-hand SEBELUM sampai ke
+    // sini, jadi ini harusnya tidak pernah terpicu di jalur normal. Tetap dijaga
+    // sebagai fallback data lama (item yang baru dipindah ke costing FIFO tanpa
+    // riwayat layer) — sisanya dianggap berbiaya 0 daripada menggagalkan transaksi.
     const consumedQty = qty.minus(remaining);
     if (consumedQty.lte(0)) return 0n;
     return BigInt(new Prisma.Decimal(totalCost.toString()).div(consumedQty).toDecimalPlaces(0).toFixed(0));
@@ -144,6 +163,17 @@ export class CostingService {
   async stockOut(db: Db, params: StockOutParams) {
     const item = await db.item.findUniqueOrThrow({ where: { id: params.itemId } });
     const qty = params.qty instanceof Prisma.Decimal ? params.qty : new Prisma.Decimal(params.qty);
+
+    // Cegah stok minus — perilaku default Accurate (preferensi "Warehouse qty can
+    // < 0" NONAKTIF secara default: transaksi keluar yang melebihi qty tersedia
+    // ditolak dengan error, bukan sekadar peringatan). §10 data design.
+    const { qty: onHand } = await this.onHandState(db, params.itemId, params.warehouseId);
+    if (onHand.minus(qty).lt(0)) {
+      throw new BadRequestException(
+        `Stok "${item.name}" tidak cukup di gudang ini (tersedia ${onHand.toString()}, diminta ${qty.toString()}) — stok tidak boleh menjadi minus.`,
+      );
+    }
+
     const unitCost =
       item.costingMethod === "fifo"
         ? await this.consumeFifoLayers(db, params.itemId, params.warehouseId, qty)

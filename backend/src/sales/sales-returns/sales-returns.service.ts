@@ -81,18 +81,27 @@ export class SalesReturnsService {
         },
       });
 
-      // Barang masuk kembali pada biaya terakhir yang diketahui (Item.lastCost) —
-      // faktur penjualan tidak menyimpan biaya pokok per baris, jadi ini pendekatan
-      // terbaik yang tersedia (judgment call, lihat laporan akhir tugas ini).
+      // Barang masuk kembali pada biaya SAAT ITEM ITU DIKELUARKAN (stock-out
+      // terakhir untuk item ini di gudang ini, pada/sebelum tanggal faktur asli) —
+      // bukan `item.lastCost` seperti sebelumnya. `lastCost` sebenarnya field sisi
+      // MASUK (diisi tiap stock-in, lihat CostingService.stockIn) yaitu biaya
+      // pembelian/produksi TERAKHIR, bukan biaya jual/keluar saat faktur ini
+      // diterbitkan — bisa jauh berbeda kalau sudah ada pembelian baru di antara
+      // faktur asli dan retur ini. `lastIssueCost` (CostingService) mendekati
+      // biaya HPP yang sesungguhnya diposting saat penjualan itu terjadi. Faktur
+      // penjualan sendiri tidak menyimpan FK ke Surat Jalan/stock_move asalnya,
+      // jadi ini pendekatan terbaik yang tersedia tanpa mengubah skema penjualan
+      // (judgment call, lihat laporan akhir tugas ini).
       const warehouseId = dto.warehouseId ?? (await this.costing.getDefaultWarehouseId(tx));
       for (const l of lines) {
         const item = itemById.get(l.itemId);
         if (item?.type === "stock") {
+          const unitCost = await this.costing.lastIssueCost(tx, l.itemId, warehouseId, invoice.date);
           await this.costing.stockIn(tx, {
             itemId: l.itemId,
             warehouseId,
             qty: l.qty,
-            unitCost: item.lastCost ?? 0n,
+            unitCost,
             date,
             refType: "sales_return",
             refId: ret.id,
