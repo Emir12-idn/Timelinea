@@ -851,3 +851,126 @@ menambah kemampuan cetak baru — di luar cakupan instruksi tugas
 
 Tidak ada defect ditemukan di keempat template yang diverifikasi — tidak
 ada perbaikan kode yang diperlukan untuk item ini.
+
+---
+
+## 13. Pass kelima — cetak Faktur Pembelian, barcode unik, verifikasi gudang, baseline test & lint
+
+Lima item dikerjakan di pass ini, campuran fitur yang masih hilang (§12.3
+sudah menandai secara eksplisit Faktur Pembelian TIDAK punya template cetak)
+dan kesehatan proyek jangka panjang (test otomatis, lint) yang belum pernah
+disentuh di pass 1-4.
+
+### 13.1 Cetak Faktur Pembelian
+
+`printing/templates/faktur-pembelian.template.ts` baru — pola struktural
+persis `fakturPenjualanHtml()` (kop perusahaan, blok pemasok "Dari", baris
+item, DPP/PPN/Total, blok tanda tangan lewat `preparerBlock()`) TAPI TIDAK
+punya field Faktur Pajak/NSFP — ini dokumen bisnis pembelian standar, bukan
+faktur pajak yang diterbitkan sistem ini. Baris item selalu berasal dari
+`po.lines` (PO tertaut) sesuai §3 (`purchase_invoice` tidak punya tabel baris
+sendiri); faktur tanpa PO menampilkan catatan dan hanya DPP/PPN/Total header.
+`GET /purchase-invoices/:id/print` baru di `PurchaseInvoicesController`,
+mengikuti pola `renderPdf()` `SalesInvoicesService` persis (NPWP per-company,
+nama pembuat faktur). Tombol PDF per-baris ditambahkan ke
+`PurchaseInvoiceList.jsx`. Diverifikasi render PDF sungguhan lewat server dev
+lokal (Chromium sandbox) — lihat riwayat commit untuk PNG hasil render.
+
+### 13.2 Barcode unik
+
+`Item.barcode` (field data murni, sudah ada sejak §11.4 — CSV/DTO/form
+create sudah lengkap) sebelumnya nullable TAPI TIDAK unik. Ditambahkan
+`@unique` (kolom nullable tetap mengizinkan banyak baris NULL di bawah
+unique index Postgres — barang tanpa barcode tidak terpengaruh), migrasi
+`item_barcode_unique` dijalankan lewat `npx prisma migrate dev` terhadap
+Postgres lokal. Kolom Barcode ditambahkan ke tabel daftar Barang & Jasa
+supaya field itu terlihat, bukan cuma bisa diisi saat create — **judgment
+call**: `BarangJasa.jsx` tidak punya form edit-item sama sekali (list +
+create saja, celah lama tidak terkait barcode), jadi tidak dibuatkan form
+edit baru untuk pass ini.
+
+### 13.3 Verifikasi pemilihan gudang di form transaksi
+
+Diperiksa `CreatePurchaseOrderDto`, `CreateSalesOrderDto`,
+`CreateSalesInvoiceDto`: TIDAK ADA yang menerima `warehouseId` sama sekali
+— **bukan celah**, sesuai desain (§9.1/§4): sistem ini cuma memindah stok di
+titik stock-in Faktur Pembelian dan stock-out Surat Jalan, tidak pernah di
+PO/SO/Faktur Penjualan sendiri. `POList.jsx` dan `InvoiceList.jsx` karena itu
+tidak perlu (dan tidak punya apa pun untuk) selektor gudang.
+
+Celah nyata yang ditemukan: `CreateDeliveryOrderDto` SUDAH menerima
+`warehouseId` sejak Persediaan §1 (default ke gudang utama kalau kosong),
+tapi menu "Surat Jalan" di frontend jatuh ke halaman Placeholder generik —
+TIDAK ADA form sama sekali. Dibuatkan `DeliveryOrderList.jsx` (list + form
+create: tanggal, tautan SO opsional yang mengisi baris otomatis sebagai
+kenyamanan UI, editor baris barang+qty, selektor gudang dari `GET
+/warehouses`) memakai `POST /delivery-orders` yang sudah ada, plus tombol
+cetak per-baris (`GET /delivery-orders/:id/print` sudah ada). Menu
+`pj-suratjalan` di `App.jsx` ditautkan ke halaman ini.
+
+Diverifikasi end-to-end terhadap Postgres lokal + server dev: SO dibuat,
+stok-in di Gudang Utama (GD-01), lalu Surat Jalan dibuat dengan
+`warehouseId` eksplisit — stok on-hand di GD-01 berkurang tepat sesuai
+qty (bukan default diam-diam ke gudang lain), membuktikan selektor gudang
+di form benar-benar sampai ke `CostingService.stockOut()`.
+
+### 13.4 Baseline test otomatis (Jest)
+
+Sebelum pass ini nol file test di seluruh repo. `jest`/`ts-jest`/`@types/jest`
+sudah ada di `devDependencies` (bawaan scaffold NestJS) tapi tidak ada
+config sama sekali. Ditambahkan block `jest` standar di `package.json`
+(identik dengan yang di-scaffold `nest new`) plus script `test:watch`/
+`test:cov`. Empat file spec baru, fokus ke logika keuangan berisiko
+tertinggi (bukan cakupan penuh — sesuai instruksi tugas):
+
+- `common/money.util.spec.ts` — pembulatan half-up persis-0,5-rupiah untuk
+  `lineAmount`/`dppFromTotal`/`percentOf`/`convertToBase` (§10.2).
+- `accounting/journal/journal.service.spec.ts` — `postEntry()` (validasi
+  balance, tolak entry kosong/akun tak dikenal/periode tertutup, baris
+  nol-diabaikan) dan `reverseEntry()` (cermin debit/kredit, tetap balance,
+  tolak void-ulang/entry tak ada), plus dua rule bisnis representatif
+  (`postSalesInvoice`, `postCustomerReceipt` selisih kurs).
+- `inventory/costing.service.spec.ts` — rata-rata bergerak lintas beberapa
+  stock-in, konsumsi FIFO lintas layer (biaya tertimbang), FEFO untuk item
+  ber-kedaluwarsa (skenario persis §11.7, sekarang otomatis), guard stok
+  minus (§10.3), dan transfer antar gudang.
+- `fixed-assets/fixed-assets.service.spec.ts` — ketiga metode penyusutan
+  §11.1 (Garis Lurus termasuk pembulatan-turun BigInt-nya, Saldo Menurun
+  Ganda termasuk switch-ke-garis-lurus di bulan terakhir supaya nilai buku
+  tepat nol, Jumlah Angka Tahun termasuk verifikasi total 3 bulan = cost).
+
+`CostingService`/`JournalService` diuji lewat fake in-memory kecil untuk
+pemanggilan Prisma-nya (bukan mock method service itu sendiri) supaya logika
+rata-rata/FIFO/FEFO/balance yang SEBENARNYA yang teruji.
+`computeMonthlyAmount()` (private, murni) diakses lewat cast `any` di test,
+tidak diubah visibility-nya di kode produksi. `npm test`: 4 suite, 46 test,
+semua lolos.
+
+### 13.5 Konfigurasi ESLint
+
+Tidak ada config lint sama sekali di `backend/` maupun `frontend/`
+sebelumnya. `backend/.eslintrc.js` adalah scaffold default NestJS sendiri
+(dikonfirmasi dari `node_modules/@nestjs/schematics/.../files/ts/.eslintrc.js`,
+bukan ditebak) — **judgment call**: sengaja TIDAK menyertakan
+`plugin:prettier/recommended` bawaan scaffold itu (yang defaultnya
+`singleQuote: true`), karena kodebase ini sudah konsisten pakai double-quote
+di 46 commit — menyalakan itu lalu `--fix` akan menulis ulang gaya quote di
+seluruh repo, persis rewrite besar-besaran yang dilarang instruksi tugas.
+`frontend/eslint.config.js` mengikuti persis scaffold `create-vite --template
+react` untuk generasi Vite/React proyek ini (js recommended + eslint-plugin-
+react-hooks + eslint-plugin-react-refresh, flat config) — dikonfirmasi
+dengan benar-benar men-scaffold proyek scratch (`create-vite@6`), bukan
+diasumsikan, karena `create vite` versi terbaru sudah pindah ke `oxlint`
+secara default.
+
+Lint dijalankan sekali ke seluruh kodebase yang ada; hanya isu yang jelas
+aman diperbaiki (bukan rewrite menyeluruh): backend — satu import tak
+terpakai, satu parameter tak terpakai (`FixedAssetsService.create`, dinamai
+ulang `_createdBy` dengan catatan — `FixedAsset` memang tidak punya kolom
+`created_by` di skema, beda dari kebanyakan tabel lain), satu `require()` di
+file test baru pass ini sendiri. Frontend — beberapa import/variabel tak
+terpakai, satu prop tak terpakai, dan satu fungsi `unmatch()` mati di
+`BankReconciliation.jsx` (**judgment call**: tidak pernah dipanggil dan
+halaman itu tidak punya daftar "baris sudah cocok" untuk tempat tombol
+unmatch — celah fitur lama, bukan sesuatu yang dibangun penuh di pass
+lint-baseline ini, dicatat di laporan akhir tugas alih-alih didiamkan).
