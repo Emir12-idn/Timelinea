@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
-import { dppFromTotal } from "../../common/money.util";
+import { convertToBase, dppFromTotal } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { COA_CODE } from "../../accounting/journal/coa-codes";
 import { CostingService } from "../../inventory/costing.service";
@@ -42,9 +42,23 @@ export class PurchaseInvoicesService {
    */
   async create(dto: CreatePurchaseInvoiceDto, createdBy?: number) {
     const date = new Date(dto.date);
-    const total = BigInt(dto.total);
-    const dpp = dto.dpp !== undefined ? BigInt(dto.dpp) : dppFromTotal(total);
-    const ppn = dto.ppn !== undefined ? BigInt(dto.ppn) : total - dpp;
+    const currency = dto.currency?.trim().toUpperCase() || "IDR";
+    if (currency !== "IDR" && dto.exchangeRate === undefined) {
+      throw new BadRequestException("exchangeRate wajib diisi untuk faktur dengan currency selain IDR");
+    }
+    const exchangeRate = dto.exchangeRate ?? 1;
+
+    // §11 data design, item 2 — multi-currency: dto.total/dpp/ppn diinput dalam
+    // `currency` (foreign kalau bukan IDR), lalu dikonversi ke Rupiah untuk
+    // disimpan (dpp/ppn/total di skema selalu Rupiah — lihat catatan di
+    // schema.prisma). Untuk IDR, exchangeRate = 1 jadi konversinya no-op dan
+    // perilakunya identik dengan sebelum multi-currency ada.
+    const totalForeign = BigInt(dto.total);
+    const dppForeign = dto.dpp !== undefined ? BigInt(dto.dpp) : dppFromTotal(totalForeign);
+    const ppnForeign = dto.ppn !== undefined ? BigInt(dto.ppn) : totalForeign - dppForeign;
+    const total = convertToBase(totalForeign, exchangeRate);
+    const dpp = convertToBase(dppForeign, exchangeRate);
+    const ppn = convertToBase(ppnForeign, exchangeRate);
 
     let debitAccountCode: string = COA_CODE.PERSEDIAAN;
     const po = dto.poId
@@ -82,6 +96,8 @@ export class PurchaseInvoicesService {
           dpp,
           ppn,
           total,
+          currency,
+          exchangeRate,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
           createdBy,
         },

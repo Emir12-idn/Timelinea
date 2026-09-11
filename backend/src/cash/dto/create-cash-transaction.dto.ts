@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min } from "class-validator";
 import { CashTransactionType } from "@prisma/client";
 
 export class CreateCashTransactionDto {
@@ -42,4 +42,17 @@ export class CreateCashTransactionDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  /**
+   * Multi-currency §2 (gap module) — kurs pada tanggal PELUNASAN ini, informational
+   * only (dicatat untuk keperluan audit/tampilan). `amount` di atas SELALU nilai
+   * Rupiah yang benar-benar diterima/dibayar (dihitung user dari kurs ini) — bukan
+   * dihitung ulang dari field ini, supaya selisih kurs tetap akurat walau field
+   * ini kosong/tidak konsisten.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  exchangeRate?: number;
 }

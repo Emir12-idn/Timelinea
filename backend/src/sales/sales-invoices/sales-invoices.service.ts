@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
-import { lineAmount, percentOf } from "../../common/money.util";
+import { convertToBase, lineAmount, percentOf } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { PdfService } from "../../printing/pdf.service";
 import { fakturPenjualanHtml } from "../../printing/templates/faktur-penjualan.template";
@@ -78,9 +78,22 @@ export class SalesInvoicesService {
     // baris) — lihat §10 data design. `percentOf` (money.util) dipakai supaya
     // pembulatannya konsisten (Decimal half-up) dengan util yang sama dipakai di
     // tempat lain, bukan Math.round(Number(...)) yang rawan presisi float.
-    const dpp = lines.reduce((sum, l) => sum + l.amount, 0n);
-    const ppn = percentOf(dpp, PPN_RATE);
+    // §11 data design, item 2 — multi-currency: baris (unitPrice/amount) diinput
+    // dalam `currency` (foreign kalau bukan IDR) apa adanya — lihat catatan di
+    // schema.prisma soal kenapa header dpp/ppn/total tetap Rupiah sementara baris
+    // tidak. Untuk IDR, exchangeRate = 1 jadi konversinya no-op (perilaku identik
+    // sebelum multi-currency ada).
+    const currency = dto.currency?.trim().toUpperCase() || "IDR";
+    if (currency !== "IDR" && dto.exchangeRate === undefined) {
+      throw new BadRequestException("exchangeRate wajib diisi untuk faktur dengan currency selain IDR");
+    }
+    const exchangeRate = dto.exchangeRate ?? 1;
+
+    const dppForeign = lines.reduce((sum, l) => sum + l.amount, 0n);
+    const ppnForeign = percentOf(dppForeign, PPN_RATE);
     const pph = BigInt(dto.pph ?? 0);
+    const dpp = convertToBase(dppForeign, exchangeRate);
+    const ppn = convertToBase(ppnForeign, exchangeRate);
     const total = dpp + ppn;
 
     return this.prisma.$transaction(async (tx) => {
@@ -98,6 +111,8 @@ export class SalesInvoicesService {
           ppn,
           pph,
           total,
+          currency,
+          exchangeRate,
           status: "draft",
           createdBy,
           lines: {

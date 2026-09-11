@@ -26,6 +26,7 @@ const COA: { code: string; name: string; type: AccountType; taxCode?: string; ta
   { code: "2-2600", name: "Utang BPJS", type: "kewajiban" }, // extra
   { code: "3-3100", name: "Modal", type: "ekuitas" },
   { code: "4-4100", name: "Penjualan", type: "pendapatan" },
+  { code: "4-4200", name: "Selisih Kurs", type: "pendapatan" }, // extra — Multi-currency §2
   { code: "5-5100", name: "Harga Pokok Penjualan", type: "beban" },
   { code: "6-6100", name: "Beban Gaji & Upah", type: "beban" },
   { code: "6-6200", name: "Beban Penyusutan", type: "beban" }, // extra

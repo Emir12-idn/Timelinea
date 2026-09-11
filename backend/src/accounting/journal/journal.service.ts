@@ -152,13 +152,33 @@ export class JournalService {
     );
   }
 
-  // ---- Rule: Penerimaan dari pelanggan -> Debit Bank/Kas (total) | Kredit Piutang Usaha (total)
+  // ---- Rule: Penerimaan dari pelanggan -> Debit Bank/Kas (amount) | Kredit Piutang Usaha (receivableAmount)
+  // Multi-currency §2 (gap module) — `receivableAmount` defaults to `amount`
+  // (perilaku asli, tidak berubah untuk faktur IDR biasa). Untuk faktur mata uang
+  // asing, pemanggil mengirim invoice.total (Rupiah yang DIBOOKING saat faktur
+  // dibuat) sebagai receivableAmount, yang bisa beda dari `amount` (Rupiah yang
+  // BENAR-BENAR diterima, dihitung user dari kurs saat pelunasan) — selisihnya
+  // adalah selisih kurs TEREALISASI, diposting otomatis ke akun Selisih Kurs
+  // supaya entry ini tetap balance sendiri tanpa entry terpisah.
   postCustomerReceipt(
     receipt: { id: number; no: string; date: Date; amount: bigint; companyId: number | null },
     cashAccountCode: string,
     db: Prisma.TransactionClient | PrismaService,
     createdBy?: number | null,
+    receivableAmount: bigint = receipt.amount,
   ) {
+    const lines: JournalLineInput[] = [
+      { accountCode: cashAccountCode, debit: receipt.amount },
+      { accountCode: COA_CODE.PIUTANG_USAHA, credit: receivableAmount },
+    ];
+    const selisih = receipt.amount - receivableAmount;
+    if (selisih > 0n) {
+      // Diterima lebih banyak Rupiah daripada yang dibooking -> laba selisih kurs.
+      lines.push({ accountCode: COA_CODE.SELISIH_KURS, credit: selisih });
+    } else if (selisih < 0n) {
+      // Diterima lebih sedikit -> rugi selisih kurs.
+      lines.push({ accountCode: COA_CODE.SELISIH_KURS, debit: -selisih });
+    }
     return this.postEntry(
       {
         date: receipt.date,
@@ -168,10 +188,7 @@ export class JournalService {
         type: "Penerimaan Penjualan",
         companyId: receipt.companyId,
         createdBy,
-        lines: [
-          { accountCode: cashAccountCode, debit: receipt.amount },
-          { accountCode: COA_CODE.PIUTANG_USAHA, credit: receipt.amount },
-        ],
+        lines,
       },
       db,
     );
@@ -229,13 +246,30 @@ export class JournalService {
     );
   }
 
-  // ---- Rule: Pembayaran ke pemasok -> Debit Utang Usaha (total) | Kredit Bank/Kas (total)
+  // ---- Rule: Pembayaran ke pemasok -> Debit Utang Usaha (payableAmount) | Kredit Bank/Kas (amount)
+  // Multi-currency §2 (gap module) — sama seperti postCustomerReceipt di atas,
+  // cermin arahnya: `payableAmount` (default `amount`, tidak berubah untuk IDR)
+  // adalah Rupiah yang dibooking saat faktur pembelian dibuat; kalau dibayar lebih
+  // BANYAK Rupiah dari itu (kurs naik) itu RUGI selisih kurs, lebih SEDIKIT itu LABA.
   postSupplierPayment(
     payment: { id: number; no: string; date: Date; amount: bigint; companyId: number | null },
     cashAccountCode: string,
     db: Prisma.TransactionClient | PrismaService,
     createdBy?: number | null,
+    payableAmount: bigint = payment.amount,
   ) {
+    const lines: JournalLineInput[] = [
+      { accountCode: COA_CODE.UTANG_USAHA, debit: payableAmount },
+      { accountCode: cashAccountCode, credit: payment.amount },
+    ];
+    const selisih = payableAmount - payment.amount;
+    if (selisih > 0n) {
+      // Dibayar lebih sedikit Rupiah daripada yang dibooking -> laba selisih kurs.
+      lines.push({ accountCode: COA_CODE.SELISIH_KURS, credit: selisih });
+    } else if (selisih < 0n) {
+      // Dibayar lebih banyak -> rugi selisih kurs.
+      lines.push({ accountCode: COA_CODE.SELISIH_KURS, debit: -selisih });
+    }
     return this.postEntry(
       {
         date: payment.date,
@@ -245,10 +279,7 @@ export class JournalService {
         type: "Pembayaran Pembelian",
         companyId: payment.companyId,
         createdBy,
-        lines: [
-          { accountCode: COA_CODE.UTANG_USAHA, debit: payment.amount },
-          { accountCode: cashAccountCode, credit: payment.amount },
-        ],
+        lines,
       },
       db,
     );

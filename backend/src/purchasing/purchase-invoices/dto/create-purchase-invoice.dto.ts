@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsInt, IsOptional, Min } from "class-validator";
+import { IsDateString, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min } from "class-validator";
 
 export class CreatePurchaseInvoiceDto {
   @IsDateString()
@@ -47,4 +47,16 @@ export class CreatePurchaseInvoiceDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  /** Multi-currency §2 (gap module) — kode mata uang (mis. "USD"). Kosongkan untuk IDR. */
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  /** Kurs manual pada tanggal faktur — Rupiah per 1 unit `currency`. Wajib diisi kalau currency bukan IDR. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  exchangeRate?: number;
 }

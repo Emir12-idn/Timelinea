@@ -438,24 +438,32 @@ model PurchaseOrderLine {
 // SEKALIGUS jadi bukti penerimaan: begitu dibuat & ditautkan ke PO, PO otomatis
 // "received" dan stok item stock-type langsung bertambah dari baris PO tsb.
 model PurchaseInvoice {
-  id         Int                   @id @default(autoincrement())
-  no         String                @unique
-  date       DateTime
-  supplierId Int                   @map("supplier_id")
-  supplier   Partner               @relation(fields: [supplierId], references: [id])
-  companyId  Int?                  @map("company_id")
-  company    Company?              @relation(fields: [companyId], references: [id])
-  poId       Int?                  @map("po_id")
-  po         PurchaseOrder?        @relation(fields: [poId], references: [id])
-  dpp        BigInt
-  ppn        BigInt
-  total      BigInt
-  status     PurchaseInvoiceStatus @default(open)
-  dueDate    DateTime?             @map("due_date")
-  createdAt  DateTime              @default(now()) @map("created_at")
-  updatedAt  DateTime              @updatedAt @map("updated_at")
-  createdBy  Int?                  @map("created_by")
-  deletedAt  DateTime?             @map("deleted_at")
+  id           Int                   @id @default(autoincrement())
+  no           String                @unique
+  date         DateTime
+  supplierId   Int                   @map("supplier_id")
+  supplier     Partner               @relation(fields: [supplierId], references: [id])
+  companyId    Int?                  @map("company_id")
+  company      Company?              @relation(fields: [companyId], references: [id])
+  poId         Int?                  @map("po_id")
+  po           PurchaseOrder?        @relation(fields: [poId], references: [id])
+  dpp          BigInt
+  ppn          BigInt
+  total        BigInt
+  // §11 data design, item 2 — multi-currency. `currency`/`exchangeRate` describe
+  // the ORIGINAL transaction currency; dpp/ppn/total above stay what they always
+  // were — the Rupiah-equivalent GL amount at `exchangeRate` (system-wide "money
+  // is always integer rupiah" invariant, schema.prisma header, is unchanged).
+  // exchangeRate = Rupiah per 1 unit of `currency` at the invoice date (manual
+  // entry, matches how Accurate desktop actually works — no rate-table/API).
+  currency     String                @default("IDR")
+  exchangeRate Decimal               @default(1) @map("exchange_rate") @db.Decimal(18, 4)
+  status       PurchaseInvoiceStatus @default(open)
+  dueDate      DateTime?             @map("due_date")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  createdBy    Int?                  @map("created_by")
+  deletedAt    DateTime?             @map("deleted_at")
 
   cashTransactions CashTransaction[]
   returns          PurchaseReturn[]
@@ -590,6 +598,12 @@ model SalesInvoice {
   // masuk ke jurnal otomatis; withholding tax itu urusan pencatatan pembeli.
   pph          BigInt             @default(0)
   total        BigInt
+  // §11 data design, item 2 — multi-currency, same convention as PurchaseInvoice
+  // above: dpp/ppn/total stay Rupiah (also what Coretax Faktur Pajak legally
+  // requires — DPP/PPN reported in Rupiah regardless of transaction currency).
+  // Line-level unitPrice/amount (SalesInvoiceLine) stay in `currency` as entered.
+  currency     String             @default("IDR")
+  exchangeRate Decimal            @default(1) @map("exchange_rate") @db.Decimal(18, 4)
   status       SalesInvoiceStatus @default(draft)
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
@@ -1085,6 +1099,10 @@ model CashTransaction {
   accountId         Int                 @map("account_id") // akun Kas/Bank yang dipakai
   account           Account             @relation(fields: [accountId], references: [id])
   amount            BigInt
+  // §11 data design, item 2 — rate at SETTLEMENT date, informational only (the
+  // realized selisih kurs itself is derived robustly from `amount` vs the
+  // invoice's booked Rupiah total in JournalService, not recomputed from this).
+  exchangeRate      Decimal?            @map("exchange_rate") @db.Decimal(18, 4)
   salesInvoiceId    Int?                @map("sales_invoice_id")
   salesInvoice      SalesInvoice?       @relation(fields: [salesInvoiceId], references: [id])
   purchaseInvoiceId Int?                @map("purchase_invoice_id")

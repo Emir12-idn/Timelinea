@@ -23,6 +23,11 @@ export const COA_CODE = {
   UTANG_BPJS: "2-2600",
   MODAL: "3-3100",
   PENJUALAN: "4-4100",
+  // §11 data design, item 2 — multi-currency: selisih kurs terealisasi (laba/rugi
+  // kurs) saat faktur mata uang asing dilunasi pada rate berbeda dari saat
+  // dibooking. Satu akun untuk laba maupun rugi (bisa didebit atau dikredit
+  // tergantung arah selisihnya) — lihat seed.ts.
+  SELISIH_KURS: "4-4200",
   HPP: "5-5100",
   BEBAN_GAJI: "6-6100",
   BEBAN_PENYUSUTAN: "6-6200",

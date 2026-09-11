@@ -22,3 +22,15 @@ export function percentOf(base: bigint, rate: number): bigint {
 export function minBigInt(a: bigint, b: bigint): bigint {
   return a < b ? a : b;
 }
+
+/**
+ * Multi-currency §2 (gap module) — konversi nilai dalam mata uang asing ke Rupiah
+ * (mata uang pelaporan) pada `rate` (Rupiah per 1 unit mata uang asing), dibulatkan
+ * ke rupiah penuh. `rate` 1 untuk IDR artinya konversi ini no-op (amount balik apa
+ * adanya), jadi aman dipanggil tanpa cek currency di pemanggilnya.
+ */
+export function convertToBase(amount: bigint, rate: number | Prisma.Decimal): bigint {
+  const r = rate instanceof Prisma.Decimal ? rate : new Prisma.Decimal(rate);
+  const converted = new Prisma.Decimal(amount.toString()).mul(r).toDecimalPlaces(0);
+  return BigInt(converted.toFixed(0));
+}
