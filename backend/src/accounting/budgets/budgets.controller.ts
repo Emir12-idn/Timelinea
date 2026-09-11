@@ -31,7 +31,7 @@ export class BudgetsController {
 
   @Roles(Role.admin, Role.hrd_keuangan)
   @Delete(":id")
-  remove(@Param("id", ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  remove(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    return this.service.remove(id, user.id);
   }
 }

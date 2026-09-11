@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CostingService } from "./costing.service";
 import { toCsv } from "../common/csv.util";
+import { AuditLogService } from "../common/audit-log/audit-log.service";
 import { CreateStockAdjustmentDto } from "./dto/create-stock-adjustment.dto";
 import { CreateTransferDto } from "./dto/create-transfer.dto";
 
@@ -25,6 +26,7 @@ export class StockMovesService {
   constructor(
     private prisma: PrismaService,
     private costing: CostingService,
+    private auditLog: AuditLogService,
   ) {}
 
   findAll(itemId?: number, projectId?: number, warehouseId?: number) {
@@ -114,11 +116,18 @@ export class StockMovesService {
     });
   }
 
-  /** "Transfer Barang" — pindah stok antar gudang pada biaya yang sama (engine costing di gudang asal). */
+  /**
+   * "Transfer Barang" — pindah stok antar gudang pada biaya yang sama (engine
+   * costing di gudang asal). §14 data design (pass keenam), item 3 — round-1
+   * module (§9.1) yang belum punya audit trail; transfer memindahkan stok
+   * sungguhan antar gudang (bukan cuma baca), jadi diaudit sama seperti aksi
+   * state-changing lain, dicatat di `stock` transaksi yang sama (atomik lewat
+   * `db` opsional AuditLogService, pola sama dengan WorkOrder posting produksi).
+   */
   async transfer(dto: CreateTransferDto, createdBy?: number) {
     const date = new Date(dto.date);
-    return this.prisma.$transaction((tx) =>
-      this.costing.transfer(tx, {
+    return this.prisma.$transaction(async (tx) => {
+      const result = await this.costing.transfer(tx, {
         itemId: dto.itemId,
         fromWarehouseId: dto.fromWarehouseId,
         toWarehouseId: dto.toWarehouseId,
@@ -129,7 +138,25 @@ export class StockMovesService {
         serialNo: dto.serialNo,
         note: dto.note ?? "Transfer antar gudang",
         createdBy,
-      }),
-    );
+      });
+      await this.auditLog.record(
+        {
+          actorId: createdBy,
+          action: "transfer",
+          entityType: "stock_move",
+          entityId: result.inMove.id,
+          before: null,
+          after: {
+            itemId: dto.itemId,
+            fromWarehouseId: dto.fromWarehouseId,
+            toWarehouseId: dto.toWarehouseId,
+            qty: dto.qty,
+            unitCost: result.unitCost,
+          },
+        },
+        tx,
+      );
+      return result;
+    });
   }
 }

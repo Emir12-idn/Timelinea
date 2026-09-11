@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { lineAmount } from "../../common/money.util";
+import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { SetProjectBudgetDto } from "./dto/set-project-budget.dto";
 
 /**
@@ -12,7 +13,10 @@ import { SetProjectBudgetDto } from "./dto/set-project-budget.dto";
  */
 @Injectable()
 export class ProjectBudgetsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLog: AuditLogService,
+  ) {}
 
   async findByProject(projectId: number) {
     const budget = await this.prisma.projectBudget.findUnique({
@@ -23,24 +27,39 @@ export class ProjectBudgetsService {
     return budget;
   }
 
-  /** Upsert seluruh RAB proyek — baris lama diganti dengan yang baru dikirim. */
-  set(dto: SetProjectBudgetDto, createdBy?: number) {
+  /**
+   * Upsert seluruh RAB proyek — baris lama diganti dengan yang baru dikirim.
+   * §14 data design (pass keenam), item 3 — round-1 module (§9.4) yang belum
+   * punya audit trail sama sekali; `set()` mengganti seluruh rencana biaya
+   * proyek sekaligus (dibandingkan ke realisasi aktual di halaman RAB), jadi
+   * state-changing yang sama kelasnya dengan ProjectBudget-nya PurchaseOrder.
+   */
+  async set(dto: SetProjectBudgetDto, createdBy?: number) {
     const lines = dto.lines.map((l) => ({ category: l.category, description: l.description, plannedAmount: BigInt(l.plannedAmount) }));
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.projectBudget.findUnique({ where: { projectId: dto.projectId } });
-      if (existing) {
-        await tx.projectBudgetLine.deleteMany({ where: { projectBudgetId: existing.id } });
+    const before = await this.prisma.projectBudget.findUnique({ where: { projectId: dto.projectId }, include: { lines: true } });
+    const result = await this.prisma.$transaction(async (tx) => {
+      if (before) {
+        await tx.projectBudgetLine.deleteMany({ where: { projectBudgetId: before.id } });
         await tx.projectBudget.update({
-          where: { id: existing.id },
+          where: { id: before.id },
           data: { lines: { create: lines } },
         });
-        return tx.projectBudget.findUniqueOrThrow({ where: { id: existing.id }, include: { lines: true } });
+        return tx.projectBudget.findUniqueOrThrow({ where: { id: before.id }, include: { lines: true } });
       }
       return tx.projectBudget.create({
         data: { projectId: dto.projectId, createdBy, lines: { create: lines } },
         include: { lines: true },
       });
     });
+    await this.auditLog.record({
+      actorId: createdBy,
+      action: before ? "update" : "create",
+      entityType: "project_budget",
+      entityId: result.id,
+      before: before ? { lines: before.lines.map((l) => ({ description: l.description, plannedAmount: l.plannedAmount })) } : null,
+      after: { lines: result.lines.map((l) => ({ description: l.description, plannedAmount: l.plannedAmount })) },
+    });
+    return result;
   }
 
   /** Laporan realisasi biaya proyek — RAB vs biaya aktual (lihat catatan kelas di atas). */
