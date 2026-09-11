@@ -358,6 +358,50 @@ export class JournalService {
     );
   }
 
+  /**
+   * Membatalkan (void) sebuah entry yang sudah posting — §10 data design, item 4.
+   * TIDAK PERNAH menghapus/mengubah baris jurnal yang sudah ada (itu prinsip "no
+   * man touch" §4: sekali posting, tetap ada selamanya untuk jejak audit). Sebagai
+   * gantinya membuat entry PEMBALIK baru (debit/kredit tiap baris ditukar, jadi
+   * totalnya otomatis balance juga) dan menandai entry asal `voidedAt`. Ini pola
+   * standar software akuntansi Indonesia — termasuk Accurate: fitur "Void" pada
+   * transaksi yang sudah posting otomatis membuat jurnal pembalik, bukan menghapus.
+   */
+  async reverseEntry(entryId: number, date: Date, db: Prisma.TransactionClient | PrismaService = this.prisma, createdBy?: number | null) {
+    const original = await db.journalEntry.findUnique({ where: { id: entryId }, include: { lines: true } });
+    if (!original) {
+      throw new BadRequestException(`Jurnal #${entryId} tidak ditemukan`);
+    }
+    if (original.voidedAt) {
+      throw new BadRequestException(`Jurnal ${original.no} sudah pernah dibatalkan sebelumnya`);
+    }
+
+    const no = await this.numbering.next("JV", original.companyId, date, db);
+    const reversal = await db.journalEntry.create({
+      data: {
+        no,
+        date,
+        refType: original.refType,
+        refId: original.refId,
+        refNo: `Pembalik ${original.no}`,
+        type: `Pembalik ${original.type}`,
+        isAuto: true,
+        companyId: original.companyId ?? undefined,
+        createdBy: createdBy ?? undefined,
+        reversalOfId: original.id,
+        lines: {
+          // Tukar debit<->kredit tiap baris — cermin dari entry asal yang sudah
+          // balance, jadi entry pembalik ini otomatis balance juga tanpa perlu
+          // divalidasi ulang lewat postEntry().
+          create: original.lines.map((l) => ({ accountId: l.accountId, debit: l.credit, credit: l.debit })),
+        },
+      },
+      include: { lines: { include: { account: true } } },
+    });
+    await db.journalEntry.update({ where: { id: original.id }, data: { voidedAt: new Date() } });
+    return reversal;
+  }
+
   // ---- Rule: Penyusutan bulanan -> Debit Beban Penyusutan | Kredit Akumulasi Penyusutan
   postDepreciation(
     asset: { id: number; code: string; companyId: number | null },

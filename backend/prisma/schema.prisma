@@ -57,6 +57,10 @@ enum PoStatus {
 enum PurchaseInvoiceStatus {
   open
   paid
+  // §10 data design, item 4 — dibatalkan lewat PATCH /purchase-invoices/:id/void:
+  // membuat jurnal pembalik (JournalService.reverseEntry) + stock-out balik dari
+  // stock-in yang dibuat faktur ini, bukan menghapus dokumennya.
+  void
 }
 
 enum SalesOrderStatus {
@@ -78,6 +82,11 @@ enum SalesInvoiceStatus {
   sent
   accepted
   paid
+  // §10 data design, item 4 — dibatalkan lewat PATCH /sales-invoices/:id/void:
+  // membuat jurnal pembalik (JournalService.reverseEntry), bukan menghapus
+  // dokumennya. Faktur ini sendiri tidak menggerakkan stok (Surat Jalan yang
+  // menggerakkan), jadi void faktur tidak menyentuh stok.
+  void
 }
 
 enum AttendanceStatus {
@@ -988,19 +997,30 @@ model Account {
 // Jurnal SELALU dibuat oleh engine (is_auto = true) dari transaksi lain — lihat
 // JournalService. ref_type/ref_id menunjuk balik ke dokumen sumber secara generik,
 // jadi menambah jenis transaksi baru tidak perlu mengubah skema ini.
+//
+// §10 data design, item 4 — pembatalan entry yang sudah posting SELALU lewat
+// jurnal pembalik (JournalService.reverseEntry), tidak pernah UPDATE/DELETE baris
+// jurnal yang sudah ada (itu prinsip "no man touch" §4 — sekali posting, baris
+// jurnal itu sendiri tidak pernah diubah). `voidedAt` ditandai di entry ASAL saat
+// entry pembaliknya dibuat; `reversalOfId` ada di entry PEMBALIK, unik supaya satu
+// entry asal cuma bisa dibalik sekali.
 model JournalEntry {
-  id        Int      @id @default(autoincrement())
-  no        String   @unique
-  date      DateTime
-  refType   String   @map("ref_type")
-  refId     Int      @map("ref_id")
-  refNo     String?  @map("ref_no")
-  type      String
-  isAuto    Boolean  @default(true) @map("is_auto")
-  companyId Int?     @map("company_id")
-  company   Company? @relation(fields: [companyId], references: [id])
-  createdAt DateTime @default(now()) @map("created_at")
-  createdBy Int?     @map("created_by")
+  id           Int           @id @default(autoincrement())
+  no           String        @unique
+  date         DateTime
+  refType      String        @map("ref_type")
+  refId        Int           @map("ref_id")
+  refNo        String?       @map("ref_no")
+  type         String
+  isAuto       Boolean       @default(true) @map("is_auto")
+  companyId    Int?          @map("company_id")
+  company      Company?      @relation(fields: [companyId], references: [id])
+  voidedAt     DateTime?     @map("voided_at")
+  reversalOfId Int?          @unique @map("reversal_of_id")
+  reversalOf   JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversedBy   JournalEntry? @relation("JournalReversal")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  createdBy    Int?          @map("created_by")
 
   lines JournalLine[]
 

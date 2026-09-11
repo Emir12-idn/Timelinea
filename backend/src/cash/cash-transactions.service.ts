@@ -46,6 +46,20 @@ export class CashTransactionsService {
       throw new BadRequestException("Pembayaran wajib mengacu ke purchase invoice (purchaseInvoiceId)");
     }
 
+    // Item 4 (§10 data design): tidak boleh menerima/membayar faktur yang sudah
+    // dibatalkan (void) — konsisten dengan guard di sisi lain (voidInvoice menolak
+    // membatalkan faktur yang sudah ada penerimaan/pembayaran tertaut).
+    if (dto.type === "receipt" && dto.salesInvoiceId) {
+      const inv = await this.prisma.salesInvoice.findFirst({ where: { id: dto.salesInvoiceId, deletedAt: null } });
+      if (!inv) throw new NotFoundException("Faktur Penjualan tidak ditemukan");
+      if (inv.status === "void") throw new BadRequestException(`Faktur ${inv.no} sudah dibatalkan (void), tidak bisa menerima pembayaran`);
+    }
+    if (dto.type === "payment" && dto.purchaseInvoiceId) {
+      const inv = await this.prisma.purchaseInvoice.findFirst({ where: { id: dto.purchaseInvoiceId, deletedAt: null } });
+      if (!inv) throw new NotFoundException("Faktur Pembelian tidak ditemukan");
+      if (inv.status === "void") throw new BadRequestException(`Faktur ${inv.no} sudah dibatalkan (void), tidak bisa dibayar`);
+    }
+
     const account = await this.prisma.account.findUnique({ where: { id: dto.accountId } });
     if (!account) throw new NotFoundException("Akun kas/bank tidak ditemukan");
 

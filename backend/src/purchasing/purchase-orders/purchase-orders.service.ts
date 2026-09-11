@@ -9,6 +9,20 @@ import { displayName } from "../../auth/role-label.util";
 import { CreatePurchaseOrderDto } from "./dto/create-purchase-order.dto";
 import { UpdatePurchaseOrderDto } from "./dto/update-purchase-order.dto";
 
+// draft -> sent -> received | cancelled ; draft -> cancelled directly too (order
+// scrapped before ever being sent). received/cancelled adalah status akhir — tidak
+// ada transisi keluar dari keduanya (§10 data design, item 4: workflow gap). Ini
+// disederhanakan dari model tiga-status Accurate (On Process/Full Received/Closed)
+// karena sistem ini sengaja tidak punya GRN terpisah (lihat backend/README.md) —
+// satu Faktur Pembelian SELALU menerima PO secara penuh, jadi tidak ada status
+// "diterima sebagian" untuk dimodelkan di sini.
+const ALLOWED_TRANSITIONS: Record<PoStatus, PoStatus[]> = {
+  draft: ["sent", "cancelled"],
+  sent: ["received", "cancelled"],
+  received: [],
+  cancelled: [],
+};
+
 @Injectable()
 export class PurchaseOrdersService {
   constructor(
@@ -95,7 +109,10 @@ export class PurchaseOrdersService {
   }
 
   async updateStatus(id: number, status: PoStatus) {
-    await this.findOne(id);
+    const po = await this.findOne(id);
+    if (!ALLOWED_TRANSITIONS[po.status].includes(status)) {
+      throw new BadRequestException(`Tidak bisa mengubah status PO dari "${po.status}" ke "${status}"`);
+    }
     return this.prisma.purchaseOrder.update({ where: { id }, data: { status } });
   }
 

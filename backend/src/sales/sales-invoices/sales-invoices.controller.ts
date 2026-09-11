@@ -34,6 +34,11 @@ export class SalesInvoicesController {
     return this.service.updateStatus(id, dto.status, user.displayName);
   }
 
+  @Patch(":id/void")
+  voidInvoice(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    return this.service.voidInvoice(id, user.displayName, user.id);
+  }
+
   @Post(":id/validate")
   validateFields(@Param("id", ParseIntPipe) id: number, @Body() dto: ValidateFieldsDto) {
     return this.service.validateFields(id, dto);

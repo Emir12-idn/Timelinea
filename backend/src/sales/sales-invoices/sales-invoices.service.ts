@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
 import { lineAmount, percentOf } from "../../common/money.util";
@@ -11,6 +11,18 @@ import { ValidateFieldsDto } from "./dto/validate-fields.dto";
 import { SalesInvoiceStatus } from "@prisma/client";
 
 const PPN_RATE = 0.11;
+
+// draft -> sent -> accepted -> paid ; paid/void adalah status akhir. "void" TIDAK
+// bisa dicapai lewat updateStatus() biasa — harus lewat voidInvoice() (endpoint
+// khusus) supaya jurnal pembaliknya otomatis dibuat, bukan cuma ganti label status
+// (§10 data design, item 4).
+const ALLOWED_TRANSITIONS: Record<SalesInvoiceStatus, SalesInvoiceStatus[]> = {
+  draft: ["sent"],
+  sent: ["accepted"],
+  accepted: ["paid"],
+  paid: [],
+  void: [],
+};
 
 @Injectable()
 export class SalesInvoicesService {
@@ -115,10 +127,60 @@ export class SalesInvoicesService {
   }
 
   async updateStatus(id: number, status: SalesInvoiceStatus, authorName = "system") {
-    await this.findOne(id);
+    const invoice = await this.findOne(id);
+    if (status === "void") {
+      throw new BadRequestException(
+        "Gunakan PATCH /sales-invoices/:id/void untuk membatalkan faktur yang sudah posting — bukan lewat status biasa, supaya jurnal pembaliknya otomatis dibuat.",
+      );
+    }
+    if (!ALLOWED_TRANSITIONS[invoice.status].includes(status)) {
+      throw new BadRequestException(`Tidak bisa mengubah status faktur dari "${invoice.status}" ke "${status}"`);
+    }
     return this.prisma.salesInvoice.update({
       where: { id },
       data: { status, logs: { create: { action: "status_change", status, author: authorName } } },
+    });
+  }
+
+  /**
+   * Void/batalkan faktur yang sudah posting — §10 data design, item 4. Membuat
+   * jurnal pembalik (JournalService.reverseEntry) lewat entry asal (refType
+   * "sales_invoice"), TIDAK menghapus faktur atau baris jurnalnya. Faktur
+   * penjualan sendiri tidak menggerakkan stok (Surat Jalan yang menggerakkan),
+   * jadi void di sini tidak menyentuh persediaan.
+   *
+   * Ditolak kalau sudah ada dokumen turunan yang menganggap faktur ini lunas/aktif
+   * — penerimaan kas, retur, atau cek/giro tertaut — itu semua harus dibatalkan
+   * duluan (item 6: tidak boleh membatalkan dokumen yang masih direferensikan).
+   */
+  async voidInvoice(id: number, authorName = "system", createdBy?: number) {
+    const invoice = await this.prisma.salesInvoice.findFirst({
+      where: { id, deletedAt: null },
+      include: { cashTransactions: true, returns: { where: { deletedAt: null } }, chequeGiros: true },
+    });
+    if (!invoice) throw new NotFoundException("Faktur Penjualan tidak ditemukan");
+    if (invoice.status === "void") {
+      throw new BadRequestException(`Faktur ${invoice.no} sudah dibatalkan sebelumnya`);
+    }
+    if (invoice.cashTransactions.length > 0) {
+      throw new BadRequestException(`Faktur ${invoice.no} sudah ada penerimaan pembayaran tertaut — tidak bisa dibatalkan`);
+    }
+    if (invoice.returns.length > 0) {
+      throw new BadRequestException(`Faktur ${invoice.no} sudah punya Retur Penjualan tertaut — tidak bisa dibatalkan`);
+    }
+    if (invoice.chequeGiros.length > 0) {
+      throw new BadRequestException(`Faktur ${invoice.no} sudah tertaut Cek/Giro — batalkan Cek/Gironya dulu`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const entry = await tx.journalEntry.findFirst({ where: { refType: "sales_invoice", refId: id, voidedAt: null } });
+      if (entry) {
+        await this.journal.reverseEntry(entry.id, new Date(), tx, createdBy);
+      }
+      return tx.salesInvoice.update({
+        where: { id },
+        data: { status: "void", logs: { create: { action: "void", status: "void", author: authorName } } },
+      });
     });
   }
 

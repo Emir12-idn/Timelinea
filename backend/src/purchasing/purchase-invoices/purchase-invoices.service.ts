@@ -55,6 +55,16 @@ export class PurchaseInvoicesService {
       : null;
     if (dto.poId && !po) throw new NotFoundException("Pesanan Pembelian (PO) tidak ditemukan");
     if (po) {
+      // Tidak ada GRN terpisah di sistem ini — satu Faktur Pembelian SEKALIGUS jadi
+      // bukti penerimaan penuh PO (lihat backend/README.md), jadi PO yang sudah
+      // "received" tidak boleh difaktur lagi (akan menggandakan stock-in) dan PO
+      // yang sudah "cancelled" jelas tidak boleh difaktur (§10 data design, item 4).
+      if (po.status === "received") {
+        throw new BadRequestException(`PO ${po.no} sudah diterima penuh lewat faktur pembelian sebelumnya`);
+      }
+      if (po.status === "cancelled") {
+        throw new BadRequestException(`PO ${po.no} sudah dibatalkan, tidak bisa difaktur`);
+      }
       if (po.lines.length === 0) throw new BadRequestException("PO ini belum punya baris item");
       const allService = po.lines.every((l) => l.item.type === "service");
       debitAccountCode = allService ? COA_CODE.HPP : COA_CODE.PERSEDIAAN;
@@ -105,6 +115,66 @@ export class PurchaseInvoicesService {
       );
 
       return invoice;
+    });
+  }
+
+  /**
+   * Void/batalkan faktur pembelian yang sudah posting — §10 data design, item 4.
+   * Membuat jurnal pembalik (bukan menghapus), stock-OUT balik dari stock-in yang
+   * dibuat faktur ini (lewat CostingService — kalau stok itu sudah sebagian
+   * terpakai/terjual di tempat lain, stockOut ini akan gagal karena guard stok
+   * minus yang sudah ada, yang justru benar: tidak boleh void faktur pembelian
+   * kalau barangnya sudah dipakai), dan PO tertaut dikembalikan ke status "sent"
+   * (supaya bisa difaktur ulang).
+   *
+   * Ditolak kalau sudah ada pembayaran atau retur pembelian tertaut ke faktur ini
+   * (item 6: tidak boleh membatalkan dokumen yang masih direferensikan).
+   */
+  async voidInvoice(id: number, createdBy?: number) {
+    const invoice = await this.prisma.purchaseInvoice.findFirst({
+      where: { id, deletedAt: null },
+      include: { cashTransactions: true, returns: { where: { deletedAt: null } }, chequeGiros: true },
+    });
+    if (!invoice) throw new NotFoundException("Faktur Pembelian tidak ditemukan");
+    if (invoice.status === "void") {
+      throw new BadRequestException(`Faktur ${invoice.no} sudah dibatalkan sebelumnya`);
+    }
+    if (invoice.cashTransactions.length > 0) {
+      throw new BadRequestException(`Faktur ${invoice.no} sudah ada pembayaran tertaut — tidak bisa dibatalkan`);
+    }
+    if (invoice.returns.length > 0) {
+      throw new BadRequestException(`Faktur ${invoice.no} sudah punya Retur Pembelian tertaut — tidak bisa dibatalkan`);
+    }
+    if (invoice.chequeGiros.length > 0) {
+      throw new BadRequestException(`Faktur ${invoice.no} sudah tertaut Cek/Giro — batalkan Cek/Gironya dulu`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const stockIns = await tx.stockMove.findMany({ where: { refType: "purchase_invoice", refId: id, qtyIn: { gt: 0 } } });
+      for (const move of stockIns) {
+        if (move.warehouseId === null) continue;
+        await this.costing.stockOut(tx, {
+          itemId: move.itemId,
+          warehouseId: move.warehouseId,
+          qty: move.qtyIn,
+          date: new Date(),
+          refType: "purchase_invoice_void",
+          refId: id,
+          note: `Void Faktur Pembelian ${invoice.no}`,
+          createdBy,
+        });
+      }
+
+      const entry = await tx.journalEntry.findFirst({ where: { refType: "purchase_invoice", refId: id, voidedAt: null } });
+      if (entry) {
+        await this.journal.reverseEntry(entry.id, new Date(), tx, createdBy);
+      }
+
+      if (invoice.poId) {
+        await tx.purchaseOrder.update({ where: { id: invoice.poId }, data: { status: "sent" } });
+      }
+
+      return tx.purchaseInvoice.update({ where: { id }, data: { status: "void" } });
     });
   }
 }
