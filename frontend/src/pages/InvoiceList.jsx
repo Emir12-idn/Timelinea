@@ -72,49 +72,51 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
         </div>
 
         <div className="rounded-lg border border-slate-200">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500">
-                <th className="px-3 py-2">Barang</th>
-                <th className="px-3 py-2 w-24">Qty</th>
-                <th className="px-3 py-2 w-24">Unit</th>
-                <th className="px-3 py-2 w-32">No PO</th>
-                <th className="px-3 py-2 w-40">Harga Satuan</th>
-                <th className="px-3 py-2 w-32 text-right">Jumlah</th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((l, i) => (
-                <tr key={i} className="border-t border-slate-100">
-                  <td className="px-3 py-2">
-                    <select value={l.itemId} onChange={(e) => onPickItem(i, e.target.value)} className={selectCls}>
-                      {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" min="0" step="any" value={l.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} className={inputCls} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input value={l.uom} onChange={(e) => updateLine(i, { uom: e.target.value })} className={inputCls} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input value={l.poRef} onChange={(e) => updateLine(i, { poRef: e.target.value })} className={inputCls} placeholder={poRef || "-"} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" min="0" value={l.unitPrice} onChange={(e) => updateLine(i, { unitPrice: e.target.value })} className={inputCls} />
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">{rupiah(Number(l.qty || 0) * Number(l.unitPrice || 0))}</td>
-                  <td className="px-3 py-2 text-right">
-                    {lines.length > 1 && (
-                      <button type="button" onClick={() => removeLine(i)} className="text-slate-400 hover:text-rose-600"><Trash2 size={15} /></button>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500">
+                  <th className="px-3 py-2">Barang</th>
+                  <th className="px-3 py-2 w-24">Qty</th>
+                  <th className="px-3 py-2 w-24">Unit</th>
+                  <th className="px-3 py-2 w-32">No PO</th>
+                  <th className="px-3 py-2 w-40">Harga Satuan</th>
+                  <th className="px-3 py-2 w-32 text-right">Jumlah</th>
+                  <th className="w-10"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
+              </thead>
+              <tbody>
+                {lines.map((l, i) => (
+                  <tr key={i} className="border-t border-slate-100">
+                    <td className="px-3 py-2">
+                      <select value={l.itemId} onChange={(e) => onPickItem(i, e.target.value)} className={selectCls}>
+                        {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" min="0" step="any" value={l.qty} onChange={(e) => updateLine(i, { qty: e.target.value })} className={inputCls} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input value={l.uom} onChange={(e) => updateLine(i, { uom: e.target.value })} className={inputCls} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input value={l.poRef} onChange={(e) => updateLine(i, { poRef: e.target.value })} className={inputCls} placeholder={poRef || "-"} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" min="0" value={l.unitPrice} onChange={(e) => updateLine(i, { unitPrice: e.target.value })} className={inputCls} />
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{rupiah(Number(l.qty || 0) * Number(l.unitPrice || 0))}</td>
+                    <td className="px-3 py-2 text-right">
+                      {lines.length > 1 && (
+                        <button type="button" onClick={() => removeLine(i)} className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={15} /></button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2">
             <button type="button" onClick={addLine} className="inline-flex items-center gap-1 text-xs font-medium text-blue-800 hover:underline">
               <Plus size={14} /> Tambah baris
             </button>
