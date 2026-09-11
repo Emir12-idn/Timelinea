@@ -34,6 +34,15 @@ Konvensi: semua tabel punya `id`, `created_at`, `updated_at`, `created_by`. Uang
 | Laporan | laba rugi, neraca, umur piutang/utang, biaya proyek, dll |
 | Pengaturan | pemasok, pelanggan, info perusahaan, pengguna & hak akses |
 
+**Catatan (§14, pass keenam):** baris Pembelian/Penjualan di atas sudah BENAR
+sejak ditulis di fase desain awal — cuma implementasinya baru menyusul.
+`penawaran` (Sales Quotation) dan `PR` (Purchase Request) sudah tertulis di sini
+sejak dokumen ini pertama dibuat, tapi skema/kode lima pass pertama langsung
+mulai dari `sales_order`/`purchase_order` tanpa keduanya — celah itu ditutup di
+§14.1/§14.2, jadi flow di atas sekarang benar-benar `Sales Quotation -> SO -> DO
+-> Faktur` dan `PR -> PO -> penerimaan -> Faktur` end-to-end, bukan cuma
+deskripsi aspirasional.
+
 Prinsip yang sudah disepakati: **input di modul asal, modul Proyek hanya menampilkan transaksi yang sudah di-tag `project_id`** — tidak ada input ganda.
 
 ---
@@ -974,3 +983,197 @@ terpakai, satu prop tak terpakai, dan satu fungsi `unmatch()` mati di
 halaman itu tidak punya daftar "baris sudah cocok" untuk tempat tombol
 unmatch — celah fitur lama, bukan sesuatu yang dibangun penuh di pass
 lint-baseline ini, dicatat di laporan akhir tugas alih-alih didiamkan).
+
+---
+
+## 14. Pass keenam — Sales Quotation & Purchase Request, audit round-1 (lanjutan §9-§13)
+
+Dua bagian: (A) dua entitas yang §2 dokumen ini sudah sebutkan sejak fase
+desain awal tapi tidak pernah dibangun di lima pass sebelumnya — diverifikasi
+hilang (bukan diasumsikan) dengan memeriksa `schema.prisma` dan kedua
+direktori frontend sebelum menulis apa pun; (B) audit kualitas granular
+terhadap enam modul round-1 (§9: Persediaan multi-gudang+costing, Pabrikasi,
+Anggaran, RAB, Cek/Giro, laporan konsolidasi) terhadap kelas masalah yang
+sudah ditutup di modul inti lewat §10-§13 (validasi transisi status, audit
+trail, test coverage, CSV import/export) tapi belum pernah disentuh ulang di
+enam modul itu sendiri sejak §9 pertama kali membangunnya. Semua perubahan
+diverifikasi langsung terhadap instance PostgreSQL lokal (request HTTP nyata
+ke server dev yang jalan) — lihat riwayat commit cabang ini untuk detail tiap
+verifikasi.
+
+### 14.1 Sales Quotation (Penawaran) — sebelumnya benar-benar hilang
+
+Diverifikasi: `grep` untuk `SalesQuotation`/`sales-quotation` di seluruh
+`backend/src` dan `frontend/src` sebelum pass ini — nihil. Skema langsung
+mulai dari `sales_order`, dan menu "Pesanan Penjualan (SO)" sendiri di
+frontend jatuh ke halaman Placeholder generik (SO backend punya
+create/findAll/findOne saja, tanpa update status/print — modul paling
+minim disentuh di seluruh sistem, konsisten dengan tidak pernah ada UI yang
+memakainya).
+
+- **SalesQuotation**/**SalesQuotationLine**: bentuk baris identik
+  `SalesOrderLine` (itemId/qty/unitPrice/amount) — quotation memang dokumen
+  penawaran harga ke pelanggan, bukan sekadar draft internal seperti PR
+  (§14.2). Field tambahan: `validUntil` (opsional), `note`, `convertedSoId`
+  (unik, nullable — diisi sekali saat dikonversi).
+- Alur status: `draft -> sent -> accepted|rejected|expired`; `draft ->
+  rejected` langsung juga boleh (quotation dibatalkan sebelum pernah
+  dikirim, pola sama dengan `draft -> cancelled` PurchaseOrder). Status akhir
+  (`accepted`/`rejected`/`expired`) tidak punya transisi keluar lewat
+  `PATCH /sales-quotations/:id/status`.
+- **Konversi ke SO** (`PATCH /sales-quotations/:id/convert-to-so`): hanya
+  boleh dari status `accepted`, dan hanya sekali (`convertedSoId` unik).
+  Memanggil `SalesOrdersService.create()` yang SUDAH ADA (pola yang sama
+  dipakai `RecurringTemplatesService.confirmDraft()` memanggil
+  `SalesInvoicesService.create()`) — numbering (`SO-YY-xxxxxx`) dan semua
+  konvensi SO lain otomatis tetap konsisten, tidak ada jalur pintas.
+- Endpoint: `GET/POST /sales-quotations`, `GET /sales-quotations/:id`,
+  `PATCH /sales-quotations/:id/status`, `PATCH
+  /sales-quotations/:id/convert-to-so`.
+- Frontend: menu baru **Penjualan → Penawaran (Quotation)**
+  (`frontend/src/pages/SalesQuotationList.jsx`) — list + form pembuatan +
+  tombol aksi status + tombol "Konversi ke SO" yang tampil begitu
+  `accepted`, menunjukkan nomor SO hasil konversi begitu selesai. Mengikuti
+  pola `POList.jsx`/`ChequeGiro.jsx` persis (list + form inline + tombol aksi
+  per-baris memanggil `PATCH`).
+- **Judgment call**: menu "Pesanan Penjualan (SO)" (`pj-so`) sendiri MASIH
+  jatuh ke Placeholder — di luar cakupan tugas ini (yang minta Sales
+  Quotation, bukan memperbaiki SO). Dicatat di laporan akhir tugas sebagai
+  temuan, bukan diperbaiki diam-diam di luar scope. Hasil konversi tetap bisa
+  diverifikasi lewat nomor SO yang ditampilkan di halaman Penawaran dan lewat
+  `GET /sales-orders/:id`.
+
+### 14.2 Purchase Request (PR) — sebelumnya benar-benar hilang
+
+Diverifikasi sama seperti §14.1: nihil hasil untuk `PurchaseRequest`/
+`purchase-request` di seluruh kode sebelum pass ini; skema langsung mulai
+dari `purchase_order`.
+
+- **PurchaseRequest**/**PurchaseRequestLine**: SENGAJA TIDAK punya
+  `supplierId` — PR di sistem ini murni pra-persetujuan internal ("barang
+  apa + berapa banyak yang dibutuhkan"), supplier baru dipilih saat konversi
+  jadi PO (beda dari SalesQuotation §14.1, yang memang sudah dokumen
+  bertarget pelanggan). Field: `requestedBy` (opsional, default ke user
+  pembuat), `departmentId`/`projectId` (nullable), `note`. Baris punya
+  `estimatedUnitPrice` opsional (murni referensi anggaran pemohon, bukan
+  harga final) dan `note` per baris — TIDAK ada `unitPrice` wajib seperti
+  SalesQuotationLine, sesuai instruksi tugas "keep it simple, it doesn't
+  need its own print template".
+- Alur status: `draft -> approved|rejected` (approve: role admin/
+  hrd_keuangan, single-level, tier sama dengan approval PO §11.5) `->
+  converted`. `rejected`/`converted` final.
+- **Konversi ke PO** (`PATCH /purchase-requests/:id/convert-to-po`, body
+  `{ supplierId, note? }`): hanya dari status `approved`, hanya sekali
+  (`convertedPoId` unik). `unitPrice` baris PO hasil konversi =
+  `estimatedUnitPrice` baris PR kalau diisi, kalau tidak fallback ke
+  `item.lastCost`, kalau itu pun kosong `0` — PO hasil konversi tetap
+  `draft` jadi harga masih bisa diedit user (`PATCH /purchase-orders/:id`)
+  sebelum di-approve/dikirim. Memanggil `PurchaseOrdersService.create()`
+  yang sudah ada, pola sama dengan §14.1.
+- Tidak ada print template PR sendiri (tidak diminta, dan PR memang bukan
+  dokumen yang dicetak/dikirim keluar — beda dari PO/Faktur yang punya pihak
+  eksternal penerima).
+- Endpoint: `GET/POST /purchase-requests`, `GET /purchase-requests/:id`,
+  `PATCH /purchase-requests/:id/approve`, `PATCH
+  /purchase-requests/:id/reject`, `PATCH /purchase-requests/:id/convert-to-po`.
+- Frontend: menu baru **Pembelian → Permintaan Pembelian (PR)**
+  (`frontend/src/pages/PurchaseRequestList.jsx`) — list + form pembuatan +
+  Setujui/Tolak + selektor pemasok inline saat konversi, menunjukkan nomor PO
+  hasil konversi. `pb-po` (POList.jsx, sudah ada) langsung bisa dipakai
+  untuk melihat/melanjutkan PO hasil konversi.
+
+Keduanya diverifikasi end-to-end lewat server dev + Postgres lokal: buat
+dokumen → transisi status (termasuk transisi tidak valid ditolak dengan
+benar) → konversi → konversi ulang ditolak (sudah pernah dikonversi) →
+`GET /audit-log` menunjukkan baris untuk tiap aksi.
+
+### 14.3 Audit — enam modul round-1 (§9) terhadap standar §10-§13
+
+**Validasi transisi status**: `WorkOrder` (`work-orders.service.ts`) dan
+`ChequeGiro` (`cheque-giro.service.ts`) DIKONFIRMASI sudah punya guard
+transisi status sejak §9 (bukan celah baru — dibaca langsung dari kode,
+bukan diasumsikan): `WorkOrder` punya `ALLOWED_TRANSITIONS` map persis pola
+`PurchaseOrdersService` (§10.4); `ChequeGiro.markCleared()`/`markBounced()`
+sama-sama menolak kalau status bukan `pending`. Tidak ada perubahan kode.
+`Budget` dan `ProjectBudget` (RAB) TIDAK punya field status sama sekali
+(murni angka anggaran, bukan dokumen berstatus) — validasi transisi status
+tidak relevan untuk keduanya, bukan celah.
+
+**Audit trail** — genuinely hilang, ditutup di pass ini
+(`AuditLogService.record()` dipasang persis pola yang sama dengan §11.6):
+
+- `BudgetsService.set()`/`remove()` — sebelumnya nol audit sama sekali
+  walau mengubah/menghapus angka anggaran yang dibaca balik Monitor
+  Anggaran.
+- `ProjectBudgetsService.set()` — sebelumnya nol audit walau mengganti
+  seluruh baris RAB proyek sekaligus.
+- `StockMovesService.transfer()` — sebelumnya nol audit walau memindahkan
+  stok sungguhan antar gudang; dicatat atomik di `$transaction` yang sama
+  dengan baris `stock_move`-nya (pola sama dengan posting produksi
+  WorkOrder).
+- **Judgment call**: `StockMovesService.createAdjustment()` (penyesuaian
+  stok manual) TIDAK ikut diaudit di pass ini — bukan diminta eksplisit di
+  daftar tugas (yang menyebut "Warehouse transfers" secara spesifik), dan
+  di luar cakupan waktu pass ini untuk diperluas tanpa diminta. Dicatat di
+  sini sebagai celah serupa untuk pass berikutnya kalau diperlukan.
+
+**Test coverage** — genuinely hilang untuk logika finansial berisiko
+tertinggi di dua modul ini, ditutup dengan 18 test baru (`npm test`: 46 ->
+64), mengikuti konvensi fake in-memory yang sama persis dengan
+`costing.service.spec.ts`/`journal.service.spec.ts` (§13.4) — instance
+service SUNGGUHAN diuji, bukan logikanya di-mock:
+
+- `work-orders.service.spec.ts` (7 test): konsumsi bahan BOM
+  (`qtyPerUnit * plannedQty`, dinilai pada biaya rata-rata bergerak bahan),
+  biaya per unit barang jadi `(bahan + konversi) / plannedQty` termasuk
+  kasus pembulatan-turun tidak-pas-bagi, jurnal produksi seimbang (dengan &
+  tanpa baris Beban Konversi), guard stok minus tetap berlaku lewat posting
+  Work Order, baris audit log, dan penolakan transisi status tidak valid.
+- `budgets.service.spec.ts` (6 test): tanda realisasi Monitor Anggaran
+  (akun saldo normal debit apa adanya vs. saldo normal kredit dibalik),
+  filter rentang bulan, independensi antar-akun, dan short-circuit periode
+  kosong.
+- `project-budgets.service.spec.ts` (5 test): jumlah baris RAB terencana,
+  aktual = Faktur Pembelian ber-PO-tag-proyek + biaya bahan stock-out
+  ber-tag-proyek, variance minus saat lampau anggaran, isolasi antar-proyek,
+  dan proyek yang belum punya RAB sama sekali.
+
+**CSV import/export**: `Item`/`Partner`/`PurchaseInvoice`/`SalesInvoice`/
+`StockMove` sudah dapat ini di §11.4; keenam modul round-1 belum satupun.
+Judgment per modul (bukan ditambah blanket ke semuanya):
+
+- **Warehouse** — DITAMBAHKAN (`GET /warehouses/export/csv`, export-only,
+  tidak ada import). Daftar gudang jarang berubah dan pendek, jadi
+  bulk-edit-lewat-CSV tidak berguna, tapi export untuk referensi/backup
+  murah dan jelas berguna (persis contoh yang disebut instruksi tugas).
+  Frontend: `ImportExportBar` yang sudah generik (§11.4) dipasang di kartu
+  "Daftar Gudang" (`Persediaan.jsx`) tanpa perlu diubah sama sekali.
+- **Work Order** — TIDAK ditambahkan. Kurang berguna untuk bulk-edit
+  (Work Order adalah dokumen transaksi dengan efek stok/jurnal begitu
+  `done`, bukan master data) — persis contoh kedua yang disebut instruksi
+  tugas ("Work Order export less so").
+- **Budget/RAB** — TIDAK ditambahkan. Baris-barisnya sedikit per
+  periode/proyek dan lebih wajar diedit langsung di form (`POST` yang
+  sudah upsert-semua-sekaligus) daripada lewat siklus export-edit-import.
+- **Cek/Giro** — TIDAK ditambahkan. Setiap baris selalu tertaut ke faktur
+  spesifik (§9.5) dan pencairannya memposting jurnal nyata — bulk-import
+  cek/giro berisiko tinggi (nomor cek/giro fisik, tanggal jatuh tempo)
+  untuk manfaat yang kecil dibanding modul transaksi lain yang sudah dapat
+  CSV di §11.4.
+
+Diverifikasi langsung terhadap instance PostgreSQL lokal: set/update/hapus
+anggaran lalu `GET /audit-log?entityType=budget` menunjukkan baris yang
+diharapkan; set RAB proyek lalu cek `entityType=project_budget`; transfer
+stok antar gudang lalu cek `entityType=stock_move`; `GET
+/warehouses/export/csv` menghasilkan CSV yang benar.
+
+### 14.4 Ringkasan status akhir per item tugas
+
+| Item | Ditemukan | Ditutup |
+|---|---|---|
+| Sales Quotation | Hilang total (§14.1) | Model+endpoint+convert+frontend baru |
+| Purchase Request | Hilang total (§14.2) | Model+endpoint+convert+frontend baru |
+| Validasi transisi status (WO/Cek-Giro/Budget) | WO & Cek/Giro sudah ada sejak §9; Budget/RAB tidak berstatus | Tidak ada perubahan kode — dikonfirmasi ulang |
+| Audit trail (Budget/RAB/transfer gudang) | Nol audit di ketiganya | `AuditLogService.record()` dipasang di ketiganya |
+| Test coverage (BOM/WO, Budget/RAB) | Nol test di keduanya | 18 test baru, `npm test` 46 -> 64 |
+| CSV (enam modul round-1) | Nol di semuanya | Warehouse (export-only); lima lainnya sengaja tidak — lihat alasan per modul di §14.3 |
