@@ -117,11 +117,6 @@ export default function BankReconciliation() {
 
   const summary = useApi(effectiveAccountId ? `/bank-statement-lines/summary?accountId=${effectiveAccountId}` : null);
 
-  const unmatch = async (id) => {
-    await api.patch(`/bank-statement-lines/${id}/unmatch`, {});
-    summary.reload();
-  };
-
   return (
     <>
       <PageHeader

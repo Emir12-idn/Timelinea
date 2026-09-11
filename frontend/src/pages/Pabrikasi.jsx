@@ -3,7 +3,7 @@ import { Plus, X, Trash2, PlayCircle, CheckCircle2, XCircle } from "lucide-react
 import { Card, PageHeader, Badge, Spinner, ErrorBanner, Field, inputCls, selectCls } from "../components/ui";
 import { useApi } from "../lib/useApi";
 import { api } from "../api/client";
-import { rupiah, dateID } from "../lib/format";
+import { dateID } from "../lib/format";
 
 function NewBomForm({ items, onClose, onCreated }) {
   const [itemId, setItemId] = useState(items[0]?.id ?? "");
@@ -72,7 +72,7 @@ function NewBomForm({ items, onClose, onCreated }) {
   );
 }
 
-function NewWorkOrderForm({ items, boms, warehouses, onClose, onCreated }) {
+function NewWorkOrderForm({ boms, warehouses, onClose, onCreated }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [productItemId, setProductItemId] = useState(boms[0]?.itemId ?? "");
   const bomsForProduct = boms.filter((b) => String(b.itemId) === String(productItemId) && b.isActive);

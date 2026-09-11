@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { convertToBase, dppFromTotal, lineAmount, minBigInt, percentOf } from "./money.util";
 
 /**
@@ -93,7 +94,6 @@ describe("money.util", () => {
     });
 
     it("accepts a Prisma.Decimal rate (as stored in the invoice)", () => {
-      const { Prisma } = require("@prisma/client");
       expect(convertToBase(100n, new Prisma.Decimal("15750.5"))).toBe(1_575_050n);
     });
   });

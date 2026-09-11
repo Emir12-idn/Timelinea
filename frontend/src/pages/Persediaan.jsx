@@ -4,7 +4,6 @@ import { Card, PageHeader, Spinner, ErrorBanner, Field, inputCls, selectCls } fr
 import { ImportExportBar } from "../components/ImportExport";
 import { useApi } from "../lib/useApi";
 import { api } from "../api/client";
-import { dateID } from "../lib/format";
 
 function NewWarehouseForm({ onClose, onCreated }) {
   const [code, setCode] = useState("");

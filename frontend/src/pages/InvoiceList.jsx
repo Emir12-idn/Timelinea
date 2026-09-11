@@ -140,7 +140,7 @@ function NewInvoiceForm({ customers, items, onClose, onCreated }) {
   );
 }
 
-function PrintButton({ path, filename }) {
+function PrintButton({ path }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const openPdf = async () => {

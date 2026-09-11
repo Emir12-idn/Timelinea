@@ -24,7 +24,12 @@ export class FixedAssetsService {
     return asset;
   }
 
-  create(dto: CreateFixedAssetDto, createdBy?: number) {
+  // `createdBy` intentionally unused: FixedAsset (unlike most tables, §1 data
+  // design's usual id/created_at/updated_at/created_by convention) has no
+  // created_by column in the schema — kept in the signature so the call site
+  // (FixedAssetsController, matching every other controller's create() call)
+  // doesn't need special-casing if a created_by column is added later.
+  create(dto: CreateFixedAssetDto, _createdBy?: number) {
     const cost = BigInt(dto.cost);
     return this.prisma.fixedAsset.create({
       data: {
