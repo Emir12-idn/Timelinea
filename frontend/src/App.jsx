@@ -27,6 +27,8 @@ import BarangJasa from "./pages/BarangJasa";
 import Mitra from "./pages/Mitra";
 import PurchaseInvoiceList from "./pages/PurchaseInvoiceList";
 import DeliveryOrderList from "./pages/DeliveryOrderList";
+import SalesQuotationList from "./pages/SalesQuotationList";
+import PurchaseRequestList from "./pages/PurchaseRequestList";
 import { labelPath } from "./menu";
 
 function Shell() {
@@ -59,6 +61,8 @@ function Shell() {
     if (active === "st-pelanggan") return <Mitra type="customer" title="Pelanggan" crumbs={["Pengaturan", "Pelanggan"]} />;
     if (active === "pb-faktur") return <PurchaseInvoiceList />;
     if (active === "pj-suratjalan") return <DeliveryOrderList />;
+    if (active === "pj-penawaran") return <SalesQuotationList />;
+    if (active === "pb-pr") return <PurchaseRequestList />;
     const { crumbs, title } = labelPath(active);
     return <Placeholder title={title} crumbs={crumbs} />;
   };

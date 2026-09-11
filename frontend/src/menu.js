@@ -7,6 +7,7 @@ export const MENU = [
   { id: "beranda", label: "Beranda", icon: Home },
   {
     id: "pembelian", label: "Pembelian", icon: ShoppingCart, children: [
+      { id: "pb-pr", label: "Permintaan Pembelian (PR)" },
       { id: "pb-po", label: "Pesanan Pembelian (PO)" },
       { id: "pb-faktur", label: "Faktur Pembelian" },
       { id: "pb-retur", label: "Retur Pembelian" },
@@ -14,6 +15,7 @@ export const MENU = [
   },
   {
     id: "penjualan", label: "Penjualan", icon: TrendingUp, children: [
+      { id: "pj-penawaran", label: "Penawaran (Quotation)" },
       { id: "pj-so", label: "Pesanan Penjualan (SO)" },
       { id: "pj-suratjalan", label: "Surat Jalan" },
       { id: "pj-faktur", label: "Faktur Penjualan" },
