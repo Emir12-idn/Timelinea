@@ -17,7 +17,9 @@ import { DepartmentsModule } from "./master/departments/departments.module";
 import { PurchaseOrdersModule } from "./purchasing/purchase-orders/purchase-orders.module";
 import { PurchaseInvoicesModule } from "./purchasing/purchase-invoices/purchase-invoices.module";
 import { PurchaseReturnsModule } from "./purchasing/purchase-returns/purchase-returns.module";
+import { PurchaseRequestsModule } from "./purchasing/purchase-requests/purchase-requests.module";
 import { SalesOrdersModule } from "./sales/sales-orders/sales-orders.module";
+import { SalesQuotationsModule } from "./sales/sales-quotations/sales-quotations.module";
 import { DeliveryOrdersModule } from "./sales/delivery-orders/delivery-orders.module";
 import { SalesInvoicesModule } from "./sales/sales-invoices/sales-invoices.module";
 import { SalesReturnsModule } from "./sales/sales-returns/sales-returns.module";
@@ -63,7 +65,9 @@ import { RecurringTemplatesModule } from "./recurring/recurring-templates.module
     PurchaseOrdersModule,
     PurchaseInvoicesModule,
     PurchaseReturnsModule,
+    PurchaseRequestsModule,
     SalesOrdersModule,
+    SalesQuotationsModule,
     DeliveryOrdersModule,
     SalesInvoicesModule,
     SalesReturnsModule,
