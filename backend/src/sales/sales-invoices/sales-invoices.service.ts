@@ -272,6 +272,11 @@ export class SalesInvoicesService {
       bankAccount: company?.bankAccount ?? null,
       paymentTermDays: invoice.customer.termDays ?? null,
       preparedByName: preparer ? displayName(preparer.name, preparer.role) : null,
+      // §11 data design, item 8 — NPWP badan usaha (Company) yang menerbitkan
+      // faktur ini, BUKAN selalu NPWP brand default — lihat catatan di
+      // layout.util.ts renderDocument(). null kalau tidak ada company sama
+      // sekali (fallback ke BRAND.npwp di renderDocument()).
+      sellerNpwp: company?.npwp ?? null,
     });
     return this.pdf.renderHtmlToPdf(html);
   }

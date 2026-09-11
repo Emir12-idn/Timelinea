@@ -5,15 +5,21 @@ interface SalesInvoiceForPrint {
   no: string;
   date: Date;
   poRef: string | null;
+  // Nomor Faktur Pajak resmi (NSFP, diterbitkan Coretax — format 17 digit sejak
+  // PER-11/PJ/2025: 2 digit kode transaksi + 2 digit kode status + 13 digit
+  // nomor seri) — BEDA dari `no` (nomor internal Faktur Penjualan sistem ini).
+  taxInvoiceNo: string | null;
   dpp: bigint;
   ppn: bigint;
   pph: bigint;
   total: bigint;
-  customer: { name: string; address: string | null };
+  customer: { name: string; address: string | null; npwp: string | null };
   lines: { partNo: string | null; poRef: string | null; name: string; qty: unknown; uom: string; unitPrice: bigint; amount: bigint }[];
   bankAccount: string | null;
   paymentTermDays: number | null;
   preparedByName: string | null;
+  /** NPWP perusahaan (badan usaha) yang menerbitkan faktur ini — lihat catatan di layout.util.ts renderDocument(). */
+  sellerNpwp: string | null;
 }
 
 export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
@@ -41,10 +47,12 @@ export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
           <div style="color:#555555">Kepada:</div>
           <div style="font-weight:600">${invoice.customer.name}</div>
           <div style="color:#555555">${invoice.customer.address ?? ""}</div>
+          <div style="color:#555555">NPWP: ${invoice.customer.npwp ?? "-"}</div>
         </td>
         <td>
           <div>No. Faktur : <b>${invoice.no}</b></div>
           <div>Tanggal : ${formatDate(invoice.date)}</div>
+          ${invoice.taxInvoiceNo ? `<div>No. Faktur Pajak : <b>${invoice.taxInvoiceNo}</b></div>` : ""}
         </td>
       </tr>
     </table>
@@ -79,5 +87,5 @@ export function fakturPenjualanHtml(invoice: SalesInvoiceForPrint): string {
     </table>
   `;
 
-  return renderDocument(`Faktur ${invoice.no}`, body);
+  return renderDocument(`Faktur ${invoice.no}`, body, { npwp: invoice.sellerNpwp });
 }

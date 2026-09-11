@@ -53,7 +53,17 @@ const BASE_CSS = `
   .highlight { background: #f2f2f2; border: 1px solid #000000; border-radius: 2px; padding: 8px 12px; font-weight: 700; color: #000000; display: flex; justify-content: space-between; margin-top: 16px; }
 `;
 
-export function renderDocument(title: string, bodyHtml: string): string {
+/**
+ * §11 data design, item 8 — Faktur Pajak (PER-11/PJ/2025) mewajibkan NPWP PENJUAL
+ * yang MENERBITKAN faktur, bukan sekadar brand default. Sistem ini multi-company
+ * (§9.6) — tiap `Company` punya `npwp` sendiri di skema — jadi print-out yang
+ * ditautkan ke company tertentu (lihat faktur-penjualan.template.ts) harus
+ * menampilkan NPWP company ITU, bukan selalu NPWP brand default yang di-hardcode.
+ * `seller` opsional: kosongkan untuk dokumen yang memang bukan tersimpan per-
+ * company (PO/BAST/Slip Gaji internal) — tetap pakai BRAND seperti semula.
+ */
+export function renderDocument(title: string, bodyHtml: string, seller?: { npwp: string | null }): string {
+  const sellerNpwp = seller?.npwp ?? BRAND.npwp;
   return `<!doctype html>
 <html>
 <head>
@@ -65,7 +75,7 @@ export function renderDocument(title: string, bodyHtml: string): string {
   <div class="kop">
     <div>
       <div class="wordmark">${BRAND.name} <span class="accent">${BRAND.nameAccent}</span></div>
-      <div class="meta">NPWP ${BRAND.npwp}</div>
+      <div class="meta">NPWP ${sellerNpwp ?? "-"}</div>
     </div>
   </div>
   ${bodyHtml}
