@@ -375,3 +375,150 @@ fitur publik Accurate 5 Enterprise terhadap skema yang sudah ada. Style visual E
 - Frontend: tab baru **Konsolidasi Multi-Company** di halaman Laporan Keuangan yang
   sudah ada (`frontend/src/pages/Laporan.jsx`) — bukan halaman baru, karena §9.6
   memang perluasan laporan yang sudah ada, bukan modul baru.
+
+---
+
+## 10. Paritas granular — audit & pengetatan mekanisme (lanjutan §9)
+
+§9 menutup enam celah struktural (multi-gudang+costing, Pabrikasi, Anggaran, RAB,
+Cek/Giro, laporan konsolidasi) plus responsive UI. Bagian ini adalah pass
+berikutnya: **detail mekanis** yang membuat sistem terasa identik dengan produk
+Accurate 5 Enterprise tertentu, bukan sekadar "ERP yang masuk akal" — riset dari
+dokumentasi publik Accurate (help center, materi training reseller, forum) via
+web search, dan (kalau publik tidak cukup detail) dari mekanisme umum
+ERPNext/standar akuntansi Indonesia, diimplementasikan dengan konvensi kode
+sistem ini sendiri. Tidak ada tampilan Accurate yang ditiru — hanya
+struktur/aturan data.
+
+### 10.1 Format penomoran dokumen
+
+Format tampilan `NumberingService.next()` diperpendek dari `PREFIX-YYYY-SEQ`
+(4 digit tahun) jadi **`PREFIX-YY-SEQ`** (2 digit tahun, tetap 6 digit sequence
+zero-padded, mis. `SI-26-000001`) — materi training Accurate & pola penomoran
+Journal Voucher yang terdokumentasi publik (kode cabang + kode jenis + **2 digit
+tahun** + serial) konsisten memakai tahun 2 digit, bukan 4. `Counter` tetap
+menyimpan tahun penuh (4 digit) sebagai kunci reset-per-tahun — cuma string yang
+ditampilkan yang berubah, mekanisme atomic upsert+increment tidak disentuh.
+Prefix per jenis dokumen (`PO`, `SI`, `SO`, `DO`, `PINV`, `JV`, dst — lihat
+pemanggilan `numbering.next()` di tiap service) dipertahankan apa adanya: sudah
+konsisten dengan singkatan yang dipakai materi training Accurate untuk jenis
+dokumen inti (`SI` untuk Sales Invoice, `PO`/`SO`/`JV` seperti sudah disepakati
+di §4), dan jenis dokumen tambahan Emerald (`PRET`, `SRET`, `CEK`, `GIRO`, `WO`,
+`CR`/`CP`, `BAST`) tidak punya padanan kode baku Accurate yang terdokumentasi
+publik untuk ditiru, jadi tetap dipakai apa adanya.
+
+### 10.2 Pembulatan PPN
+
+Aturan resmi (PER-11/PJ/2025, menggantikan PER-29/PJ/2015): PPN dibulatkan ke
+rupiah penuh dengan **half-up** (turun kalau desimal < 0,50, naik kalau ≥ 0,50)
+— sama seperti perilaku `Math.round`/`Prisma.Decimal` default (`ROUND_HALF_UP`)
+yang sudah dipakai sistem ini. Accurate sendiri membulatkan PPN **di level
+dokumen** (preferensi "Rounded Upper" per faktur, bukan per baris) — pola
+**sum-then-round** yang sudah dipakai `SalesInvoicesService`/dkk (jumlah baris
+dulu, baru PPN dihitung & dibulatkan sekali dari total DPP) SUDAH BENAR, tidak
+diubah. Yang diperbaiki: tiga tempat (`SalesInvoicesService`,
+`SalesReturnsService`, `PurchaseReturnsService`) yang menghitung PPN dengan
+`Math.round(Number(dpp) * rate)` manual (konversi ke `Number`, rawan presisi
+untuk nilai besar) sekarang memakai `percentOf()` (`money.util.ts`) yang sudah
+ada — hasil angkanya sama untuk skala rupiah wajar, tapi konsisten & lebih aman.
+PPh 21/23 tetap seperti sebelumnya: `sales_invoice.pph` informational-only
+(potongan pembeli, tidak masuk jurnal penjual) dan `payslip.taxPph21` input
+manual (tidak ada mesin hitung PTKP/TER — di luar cakupan pass ini).
+
+### 10.3 Costing — stok minus & retur
+
+- **Stok minus dicegah**: `CostingService.stockOut()` sekarang menolak
+  (`BadRequestException`) stock-out yang membuat qty on-hand di gudang itu jadi
+  negatif — perilaku *default* Accurate (preferensi "Warehouse qty can < 0"
+  NONAKTIF secara default: transaksi keluar yang melebihi qty tersedia
+  ditolak dengan error). Berlaku otomatis ke semua pemanggil `stockOut()`
+  (Surat Jalan, retur pembelian, konsumsi bahan Work Order, penyesuaian,
+  transfer) karena semuanya lewat satu method itu.
+- **Retur penjualan direstock pada biaya keluar terakhir, bukan `lastCost`**:
+  `item.lastCost` sebenarnya field sisi MASUK (diisi tiap stock-in — biaya
+  pembelian/produksi terakhir), bukan biaya barang itu saat DIJUAL. Method baru
+  `CostingService.lastIssueCost()` mencari stock-out terakhir untuk
+  item+gudang itu pada/sebelum tanggal faktur asli, dipakai `SalesReturnsService`
+  menggantikan `item.lastCost`. **Judgment call**: `SalesInvoice` tidak
+  menyimpan FK ke Surat Jalan/stock_move asalnya, jadi ini pendekatan terbaik
+  yang tersedia tanpa mengubah skema alur penjualan — bukan kepastian mutlak
+  cocok 1:1 dengan stock_move asli kalau ada lebih dari satu pengiriman untuk
+  item yang sama di rentang waktu berdekatan.
+
+### 10.4 Status dokumen & pembatalan
+
+- **PurchaseOrder**: transisi status sekarang divalidasi (`draft → sent →
+  received|cancelled`; `draft → cancelled` langsung; `received`/`cancelled`
+  final) — sebelumnya `updateStatus()` menerima status apa saja. Faktur
+  Pembelian menolak memfaktur PO yang sudah `received` (mencegah PO
+  ter-invoice dua kali dan stock-in dobel — sistem ini sengaja tidak punya GRN
+  terpisah, lihat `backend/README.md`, jadi satu PO cuma boleh diterima penuh
+  sekali) atau `cancelled`.
+- **SalesInvoice**: transisi status divalidasi (`draft → sent → accepted →
+  paid`); status `void` sengaja tidak bisa dicapai lewat `updateStatus()` biasa.
+- **Pembalik jurnal (void) — sebelumnya tidak ada jalan sama sekali**:
+  `JournalService.reverseEntry()` baru — TIDAK PERNAH mengubah/menghapus baris
+  jurnal yang sudah ada (prinsip "no man touch" §4), sebagai gantinya membuat
+  entry pembalik (debit/kredit ditukar) dan menandai entry asal `voidedAt`.
+  Ini persis perilaku Accurate: fitur "Void" pada transaksi yang sudah posting
+  otomatis membuat jurnal pembalik. `PATCH /sales-invoices/:id/void` dan
+  `PATCH /purchase-invoices/:id/void` memakainya; versi Faktur Pembelian juga
+  membalik stock-in yang dibuatnya (menolak kalau stok itu sudah terpakai —
+  konsekuensi wajar dari §10.3's guard stok minus) dan mengembalikan PO
+  tertaut ke status `sent`. Keduanya menolak void kalau faktur sudah ada
+  pembayaran/retur/cek-giro tertaut (§10.6).
+
+### 10.5 Struktur Laporan Keuangan (PSAK)
+
+- **Laba Rugi**: sekarang multi-step (Pendapatan → Harga Pokok Penjualan →
+  **Laba Kotor** → Beban Operasional → **Laba Usaha** → Laba Bersih), bukan
+  cuma dua daftar rata Pendapatan/Beban. HPP dipisah lewat `COA_CODE.HPP` yang
+  sudah ada (satu-satunya akun HPP di COA dasar), bukan field baru. Laba Usaha
+  = Laba Bersih untuk saat ini karena COA dasar belum punya akun
+  pendapatan/beban lain-lain terpisah — bukan kesalahan, cuma cakupan COA yang
+  masih sederhana.
+- **Neraca**: Aset & Kewajiban dikelompokkan **Lancar/Tidak Lancar** (klasifikasi
+  PSAK 1: direalisasi/diselesaikan dalam siklus operasi normal atau ≤12 bulan)
+  lewat field baru `Account.isCurrent` (default `true`) — bukan pola nama/kode
+  akun yang di-hardcode, karena COA memang didesain bisa diedit per perusahaan
+  (§5). Seed menandai `Aktiva Tetap`/`Akumulasi Penyusutan` sebagai
+  `isCurrent: false`; sisanya di COA dasar memang lancar semua (termasuk tidak
+  adanya akun kewajiban jangka panjang — jadi bagian itu kosong, sesuai
+  kenyataan, bukan bug).
+- Field lama (`pendapatan`/`beban`/`totalBeban`/`labaRugiBersih`,
+  `aset`/`kewajiban`/`totalAset`/`totalKewajiban`) tetap ada apa adanya di
+  response API untuk kompatibilitas mundur (dipakai `konsolidasi()`).
+  Buku Besar (`bukuBesar()`) sudah dicek — formatnya (saldo awal + mutasi +
+  saldo berjalan) sudah standar, tidak diubah.
+
+### 10.6 Validasi tingkat-field
+
+- **Debit = kredit**: sudah terjamin sejak sebelum pass ini —
+  `JournalService.postEntry()` melempar error kalau tidak balance, dan
+  satu-satunya jalan menulis `journal_line` adalah lewat method itu (tidak ada
+  endpoint create manual, `JournalEntriesController` read-only). Dikonfirmasi
+  ulang, tidak ada perubahan kode.
+- **Nomor dokumen duplikat**: sudah dicegah sejak sebelum pass ini — setiap DTO
+  create TIDAK menerima `no` dari user (selalu dari `NumberingService`), kolom
+  `no` selalu `@unique`, dan `PrismaExceptionFilter` global mengubah
+  pelanggaran unique constraint jadi respons 409 yang rapi. Dikonfirmasi ulang,
+  tidak ada perubahan kode.
+- **Tutup buku periode — sebelumnya tidak diimplementasikan sama sekali**
+  (§2/§8 sudah menyebutnya sejak awal, tapi belum ada baris kode untuk itu).
+  Model baru `ClosedPeriod` (`period` + `companyId`, `0` = seluruh perusahaan —
+  pola sama dengan `Counter`/`Budget`) + modul `closed-periods` (list/close/
+  reopen, role admin & hrd_keuangan). Ditegakkan di SATU titik:
+  `JournalService.assertPeriodOpen()`, dipanggil dari `postEntry()` DAN
+  `reverseEntry()` — otomatis menutupi semua jenis dokumen transaksi yang ada
+  maupun yang akan ditambah nanti, tanpa menyentuh modul lain satu per satu.
+- **Tidak boleh hapus dokumen yang masih direferensikan**: untuk dokumen
+  transaksi, sudah tertutupi oleh guard status PO (§10.4) dan guard void
+  faktur (§10.4) — keduanya menolak kalau ada dokumen turunan. Diperluas ke
+  master data: `PartnersService.remove()`/`ItemsService.remove()` sekarang
+  menolak menghapus mitra/barang yang sudah dipakai di transaksi manapun
+  (PO/SO/faktur/proyek untuk mitra; stock_move/baris dokumen manapun untuk
+  barang) — mitra/barang yang belum pernah dipakai tetap bisa dihapus normal.
+
+Semua perubahan di §10 diverifikasi langsung terhadap instance PostgreSQL lokal
+(bukan cuma review kode statis) — lihat riwayat commit cabang ini untuk detail
+tiap verifikasi.
