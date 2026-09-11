@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, X, ArrowRightLeft, Warehouse as WarehouseIcon } from "lucide-react";
 import { Card, PageHeader, Spinner, ErrorBanner, Field, inputCls, selectCls } from "../components/ui";
+import { ImportExportBar } from "../components/ImportExport";
 import { useApi } from "../lib/useApi";
 import { api } from "../api/client";
 import { dateID } from "../lib/format";
@@ -160,7 +161,8 @@ export default function Persediaan() {
         crumbs={["Persediaan", "Gudang & Transfer"]}
         title="Gudang & Transfer Barang"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ImportExportBar exportPath="/stock-moves/export/csv" exportFilename="stock-moves.csv" />
             <button onClick={() => setShowTransferForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2 text-sm font-medium text-blue-800 hover:bg-blue-100">
               <ArrowRightLeft size={16} /> Transfer Barang
             </button>

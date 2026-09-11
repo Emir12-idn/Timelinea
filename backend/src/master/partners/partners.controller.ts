@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { Response } from "express";
 import { PartnerType } from "@prisma/client";
 import { PartnersService } from "./partners.service";
 import { CreatePartnerDto } from "./dto/create-partner.dto";
@@ -35,5 +37,20 @@ export class PartnersController {
   @Delete(":id")
   remove(@Param("id", ParseIntPipe) id: number) {
     return this.service.remove(id);
+  }
+
+  /** §11 data design, item 4 — import CSV (upsert per kolom `code`). */
+  @Post("import")
+  @UseInterceptors(FileInterceptor("file"))
+  importCsv(@UploadedFile() file: Express.Multer.File, @CurrentUser() user: AuthUser) {
+    if (!file) throw new BadRequestException("File CSV wajib diunggah (field 'file')");
+    return this.service.importCsv(file.buffer.toString("utf-8"), user.id);
+  }
+
+  @Get("export/csv")
+  async exportCsv(@Res() res: Response, @Query("type") type?: PartnerType) {
+    const csv = await this.service.exportCsv(type);
+    res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="partners.csv"' });
+    res.send(csv);
   }
 }

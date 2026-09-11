@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { Response } from "express";
 import { ItemsService } from "./items.service";
 import { CreateItemDto } from "./dto/create-item.dto";
 import { UpdateItemDto } from "./dto/update-item.dto";
@@ -39,5 +41,20 @@ export class ItemsController {
   @Delete(":id")
   remove(@Param("id", ParseIntPipe) id: number) {
     return this.service.remove(id);
+  }
+
+  /** §11 data design, item 4 — import CSV (upsert per kolom `code`). */
+  @Post("import")
+  @UseInterceptors(FileInterceptor("file"))
+  importCsv(@UploadedFile() file: Express.Multer.File, @CurrentUser() user: AuthUser) {
+    if (!file) throw new BadRequestException("File CSV wajib diunggah (field 'file')");
+    return this.service.importCsv(file.buffer.toString("utf-8"), user.id);
+  }
+
+  @Get("export/csv")
+  async exportCsv(@Res() res: Response) {
+    const csv = await this.service.exportCsv();
+    res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="items.csv"' });
+    res.send(csv);
   }
 }

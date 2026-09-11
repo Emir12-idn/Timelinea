@@ -7,11 +7,26 @@ import { PdfService } from "../../printing/pdf.service";
 import { fakturPenjualanHtml } from "../../printing/templates/faktur-penjualan.template";
 import { displayName } from "../../auth/role-label.util";
 import { AuditLogService } from "../../common/audit-log/audit-log.service";
+import { toCsv } from "../../common/csv.util";
 import { CreateSalesInvoiceDto } from "./dto/create-sales-invoice.dto";
 import { ValidateFieldsDto } from "./dto/validate-fields.dto";
 import { SalesInvoiceStatus } from "@prisma/client";
 
 const PPN_RATE = 0.11;
+
+const SALES_INVOICE_EXPORT_COLUMNS = [
+  "no",
+  "date",
+  "customerName",
+  "taxInvoiceNo",
+  "dpp",
+  "ppn",
+  "pph",
+  "total",
+  "currency",
+  "exchangeRate",
+  "status",
+];
 
 // draft -> sent -> accepted -> paid ; paid/void adalah status akhir. "void" TIDAK
 // bisa dicapai lewat updateStatus() biasa — harus lewat voidInvoice() (endpoint
@@ -279,5 +294,12 @@ export class SalesInvoicesService {
       sellerNpwp: company?.npwp ?? null,
     });
     return this.pdf.renderHtmlToPdf(html);
+  }
+
+  /** §11 data design, item 4 — export CSV daftar Faktur Penjualan. */
+  async exportCsv(): Promise<string> {
+    const invoices = await this.findAll();
+    const rows = invoices.map((inv) => ({ ...inv, customerName: inv.customer.name }));
+    return toCsv(rows, SALES_INVOICE_EXPORT_COLUMNS);
   }
 }

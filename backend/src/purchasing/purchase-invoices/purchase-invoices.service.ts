@@ -6,7 +6,10 @@ import { JournalService } from "../../accounting/journal/journal.service";
 import { COA_CODE } from "../../accounting/journal/coa-codes";
 import { CostingService } from "../../inventory/costing.service";
 import { AuditLogService } from "../../common/audit-log/audit-log.service";
+import { toCsv } from "../../common/csv.util";
 import { CreatePurchaseInvoiceDto } from "./dto/create-purchase-invoice.dto";
+
+const PURCHASE_INVOICE_EXPORT_COLUMNS = ["no", "date", "supplierName", "poNo", "dpp", "ppn", "total", "currency", "exchangeRate", "status", "dueDate"];
 
 @Injectable()
 export class PurchaseInvoicesService {
@@ -214,5 +217,16 @@ export class PurchaseInvoicesService {
       );
       return voided;
     });
+  }
+
+  /** §11 data design, item 4 — export CSV daftar Faktur Pembelian. */
+  async exportCsv(): Promise<string> {
+    const invoices = await this.findAll();
+    const rows = invoices.map((inv) => ({
+      ...inv,
+      supplierName: inv.supplier.name,
+      poNo: inv.po?.no ?? "",
+    }));
+    return toCsv(rows, PURCHASE_INVOICE_EXPORT_COLUMNS);
   }
 }

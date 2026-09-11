@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Res, UseGuards } from "@nestjs/common";
+import { Response } from "express";
 import { PurchaseInvoicesService } from "./purchase-invoices.service";
 import { CreatePurchaseInvoiceDto } from "./dto/create-purchase-invoice.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -13,6 +14,14 @@ export class PurchaseInvoicesController {
   @Get()
   findAll() {
     return this.service.findAll();
+  }
+
+  /** §11 data design, item 4 — export CSV. Terdaftar sebelum ":id" supaya "export" tidak ditangkap sebagai :id. */
+  @Get("export/csv")
+  async exportCsv(@Res() res: Response) {
+    const csv = await this.service.exportCsv();
+    res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="purchase-invoices.csv"' });
+    res.send(csv);
   }
 
   @Get(":id")

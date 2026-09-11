@@ -19,6 +19,14 @@ export class SalesInvoicesController {
     return this.service.findAll(status);
   }
 
+  /** §11 data design, item 4 — export CSV. Terdaftar sebelum ":id" supaya "export" tidak ditangkap sebagai :id. */
+  @Get("export/csv")
+  async exportCsv(@Res() res: Response) {
+    const csv = await this.service.exportCsv();
+    res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="sales-invoices.csv"' });
+    res.send(csv);
+  }
+
   @Get(":id")
   findOne(@Param("id", ParseIntPipe) id: number) {
     return this.service.findOne(id);

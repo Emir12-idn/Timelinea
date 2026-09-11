@@ -23,6 +23,9 @@ import Pabrikasi from "./pages/Pabrikasi";
 import Anggaran from "./pages/Anggaran";
 import RAB from "./pages/RAB";
 import ChequeGiro from "./pages/ChequeGiro";
+import BarangJasa from "./pages/BarangJasa";
+import Mitra from "./pages/Mitra";
+import PurchaseInvoiceList from "./pages/PurchaseInvoiceList";
 import { labelPath } from "./menu";
 
 function Shell() {
@@ -50,6 +53,10 @@ function Shell() {
     if (active === "bb-anggaran") return <Anggaran />;
     if (active === "pr-rab") return <RAB />;
     if (active === "kb-cekgiro") return <ChequeGiro />;
+    if (active === "ps-barang") return <BarangJasa />;
+    if (active === "st-pemasok") return <Mitra type="supplier" title="Pemasok" crumbs={["Pengaturan", "Pemasok"]} />;
+    if (active === "st-pelanggan") return <Mitra type="customer" title="Pelanggan" crumbs={["Pengaturan", "Pelanggan"]} />;
+    if (active === "pb-faktur") return <PurchaseInvoiceList />;
     const { crumbs, title } = labelPath(active);
     return <Placeholder title={title} crumbs={crumbs} />;
   };

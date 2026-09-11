@@ -1,8 +1,24 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CostingService } from "./costing.service";
+import { toCsv } from "../common/csv.util";
 import { CreateStockAdjustmentDto } from "./dto/create-stock-adjustment.dto";
 import { CreateTransferDto } from "./dto/create-transfer.dto";
+
+const STOCK_MOVE_EXPORT_COLUMNS = [
+  "date",
+  "itemCode",
+  "itemName",
+  "warehouseCode",
+  "qtyIn",
+  "qtyOut",
+  "unitCost",
+  "refType",
+  "refId",
+  "batchNo",
+  "expiryDate",
+  "note",
+];
 
 @Injectable()
 export class StockMovesService {
@@ -21,6 +37,18 @@ export class StockMovesService {
       include: { item: true, project: true, warehouse: true },
       orderBy: { date: "desc" },
     });
+  }
+
+  /** §11 data design, item 4 — export CSV daftar mutasi stok. */
+  async exportCsv(itemId?: number, projectId?: number, warehouseId?: number): Promise<string> {
+    const moves = await this.findAll(itemId, projectId, warehouseId);
+    const rows = moves.map((m) => ({
+      ...m,
+      itemCode: m.item.code,
+      itemName: m.item.name,
+      warehouseCode: m.warehouse?.code ?? "",
+    }));
+    return toCsv(rows, STOCK_MOVE_EXPORT_COLUMNS);
   }
 
   /** Stok on-hand per item per gudang — dari stock_moves, bukan angka tersimpan. */

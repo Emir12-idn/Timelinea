@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, X, ChevronLeft, Printer } from "lucide-react";
 import { Card, PageHeader, Badge, Spinner, ErrorBanner, Field, inputCls, selectCls } from "../components/ui";
+import { ImportExportBar } from "../components/ImportExport";
 import { useApi } from "../lib/useApi";
 import { api, fetchPdfObjectUrl } from "../api/client";
 import { rupiah, dateID } from "../lib/format";
@@ -259,9 +260,12 @@ export default function InvoiceList() {
         crumbs={["Penjualan", "Faktur Penjualan"]}
         title="Faktur Penjualan"
         actions={
-          <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-800">
-            <Plus size={16} /> Faktur Baru
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ImportExportBar exportPath="/sales-invoices/export/csv" exportFilename="sales-invoices.csv" />
+            <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-800">
+              <Plus size={16} /> Faktur Baru
+            </button>
+          </div>
         }
       />
       <ErrorBanner message={inv.error || customers.error || items.error} />
