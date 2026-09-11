@@ -363,3 +363,15 @@ fitur publik Accurate 5 Enterprise terhadap skema yang sudah ada. Style visual E
 - Endpoint: `GET/POST /cheque-giros`, `PATCH /cheque-giros/:id/clear`,
   `PATCH /cheque-giros/:id/bounce`.
 - Frontend: menu **Kas & Bank → Cek/Giro** (`frontend/src/pages/ChequeGiro.jsx`).
+
+### 9.6 Laporan konsolidasi multi-company (prioritas rendah)
+
+- Tidak ada entitas baru — murni komposisi ulang `ReportsService.labaRugi()`/`neraca()`
+  yang sudah ada (keduanya sudah menerima `companyId` opsional): `konsolidasi()`
+  memanggilnya sekali per `company` aktif untuk baris per-perusahaan, lalu sekali lagi
+  **tanpa** `companyId` untuk baris "Gabungan" (query tanpa filter company otomatis
+  menjumlah semua company, termasuk jurnal lama tanpa `company_id`).
+- Endpoint: `GET /reports/konsolidasi?from=&to=&asOf=` (asOf default = `to`).
+- Frontend: tab baru **Konsolidasi Multi-Company** di halaman Laporan Keuangan yang
+  sudah ada (`frontend/src/pages/Laporan.jsx`) — bukan halaman baru, karena §9.6
+  memang perluasan laporan yang sudah ada, bukan modul baru.

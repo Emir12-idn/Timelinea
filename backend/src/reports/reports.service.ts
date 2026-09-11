@@ -240,4 +240,36 @@ export class ReportsService {
       grandTotal: rows.reduce((s, r) => s + r.amount, 0n),
     };
   }
+
+  /**
+   * Laporan konsolidasi multi-company (§6, gap module — prioritas rendah). Tidak ada
+   * logika baru: memanggil ulang labaRugi()/neraca() di atas per company, plus sekali
+   * lagi tanpa companyId untuk baris "Konsolidasi" (query tanpa filter company sudah
+   * otomatis menjumlah semua company — itulah yang dipakai sebagai gabungan).
+   */
+  async konsolidasi(from: Date | undefined, to: Date | undefined, asOf: Date | undefined) {
+    const companies = await this.prisma.company.findMany({ where: { deletedAt: null }, orderBy: { code: "asc" } });
+
+    const perCompany = await Promise.all(
+      companies.map(async (c) => ({
+        companyId: c.id,
+        companyCode: c.code,
+        companyName: c.name,
+        labaRugi: await this.labaRugi(from, to, c.id),
+        neraca: await this.neraca(asOf, c.id),
+      })),
+    );
+
+    return {
+      from: from ?? null,
+      to: to ?? null,
+      asOf: asOf ?? null,
+      companies: perCompany,
+      // Gabungan seluruh badan usaha — termasuk jurnal tanpa company_id (mis. entri lama).
+      combined: {
+        labaRugi: await this.labaRugi(from, to),
+        neraca: await this.neraca(asOf),
+      },
+    };
+  }
 }

@@ -11,6 +11,7 @@ const TABS = [
   { id: "neraca", label: "Neraca" },
   { id: "buku-besar", label: "Buku Besar" },
   { id: "aging", label: "Aging Piutang/Hutang" },
+  { id: "konsolidasi", label: "Konsolidasi Multi-Company" },
 ];
 
 function TabBar({ active, setActive }) {
@@ -253,6 +254,92 @@ function Aging() {
   );
 }
 
+function Konsolidasi() {
+  const [from, setFrom] = useState(START_OF_YEAR);
+  const [to, setTo] = useState(TODAY);
+  const r = useApi(`/reports/konsolidasi?from=${from}&to=${to}`);
+
+  return (
+    <>
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Field label="Dari Tanggal"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} /></Field>
+        <Field label="Sampai Tanggal"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} /></Field>
+      </div>
+      <ErrorBanner message={r.error} />
+      {r.loading ? <Spinner /> : r.data && (
+        <div className="space-y-4">
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-100 bg-blue-900 px-4 py-3 text-sm font-semibold text-white">
+              Gabungan Seluruh Badan Usaha
+            </div>
+            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-3">
+              <div>
+                <div className="text-xs text-slate-500">Total Pendapatan</div>
+                <div className="mt-1 text-base font-bold tabular-nums text-slate-800">{rupiah(r.data.combined.labaRugi.totalPendapatan)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Total Beban</div>
+                <div className="mt-1 text-base font-bold tabular-nums text-slate-800">{rupiah(r.data.combined.labaRugi.totalBeban)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Laba (Rugi) Bersih</div>
+                <div className={`mt-1 text-base font-bold tabular-nums ${Number(r.data.combined.labaRugi.labaRugiBersih) >= 0 ? "text-green-700" : "text-rose-700"}`}>
+                  {rupiah(r.data.combined.labaRugi.labaRugiBersih)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Total Aset</div>
+                <div className="mt-1 text-base font-bold tabular-nums text-slate-800">{rupiah(r.data.combined.neraca.totalAset)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Total Kewajiban</div>
+                <div className="mt-1 text-base font-bold tabular-nums text-slate-800">{rupiah(r.data.combined.neraca.totalKewajiban)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Total Ekuitas</div>
+                <div className="mt-1 text-base font-bold tabular-nums text-slate-800">{rupiah(r.data.combined.neraca.totalEkuitas)}</div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Per Badan Usaha</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-left text-xs font-medium text-slate-500">
+                    <th className="px-4 py-2">Perusahaan</th>
+                    <th className="px-4 py-2 text-right">Pendapatan</th>
+                    <th className="px-4 py-2 text-right">Beban</th>
+                    <th className="px-4 py-2 text-right">Laba (Rugi)</th>
+                    <th className="px-4 py-2 text-right">Total Aset</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {r.data.companies.map((c) => (
+                    <tr key={c.companyId} className="border-b border-slate-100 last:border-0">
+                      <td className="px-4 py-2.5 text-slate-700">{c.companyCode} — {c.companyName}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{rupiah(c.labaRugi.totalPendapatan)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{rupiah(c.labaRugi.totalBeban)}</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${Number(c.labaRugi.labaRugiBersih) >= 0 ? "text-green-700" : "text-rose-700"}`}>
+                        {rupiah(c.labaRugi.labaRugiBersih)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{rupiah(c.neraca.totalAset)}</td>
+                    </tr>
+                  ))}
+                  {r.data.companies.length === 0 && (
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">Belum ada badan usaha lain selain default.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function Laporan() {
   const [tab, setTab] = useState("laba-rugi");
 
@@ -264,6 +351,7 @@ export default function Laporan() {
       {tab === "neraca" && <Neraca />}
       {tab === "buku-besar" && <BukuBesar />}
       {tab === "aging" && <Aging />}
+      {tab === "konsolidasi" && <Konsolidasi />}
     </>
   );
 }
