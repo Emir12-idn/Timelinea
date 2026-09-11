@@ -522,3 +522,212 @@ manual (tidak ada mesin hitung PTKP/TER — di luar cakupan pass ini).
 Semua perubahan di §10 diverifikasi langsung terhadap instance PostgreSQL lokal
 (bukan cuma review kode statis) — lihat riwayat commit cabang ini untuk detail
 tiap verifikasi.
+
+---
+
+## 11. Pass ketiga — modul & mekanisme tambahan (lanjutan §9/§10)
+
+§9 menutup enam celah struktural, §10 adalah audit mekanis granular. Bagian ini
+adalah pass ketiga: modul/fitur yang masih hilang dari perbandingan segar
+terhadap Accurate 5 Enterprise (multi-currency, transaksi berulang,
+import/export, approval PO, audit trail), plus dua verifikasi/perbaikan
+mekanis (FEFO costing, kelengkapan field Faktur Pajak). Semua perubahan di
+bawah diverifikasi langsung terhadap instance PostgreSQL lokal (dibuktikan
+lewat request HTTP nyata ke server dev yang jalan, bukan cuma review kode
+statis) — lihat riwayat commit cabang ini untuk detail tiap verifikasi.
+
+### 11.1 Aktiva Tetap — metode penyusutan Saldo Menurun Ganda & Jumlah Angka Tahun
+
+- `FixedAsset.method` (`DepreciationMethod`) sekarang punya tiga nilai:
+  `straight_line` (Garis Lurus, sudah ada), `double_declining_balance` (Saldo
+  Menurun Ganda), `sum_of_years_digits` (Jumlah Angka Tahun).
+- `FixedAssetsService.computeMonthlyAmount()` — satu fungsi per metode:
+  - **Garis Lurus**: `cost / usefulLifeMonths` per bulan (flat, tidak berubah).
+  - **Saldo Menurun Ganda**: `bookValue * 2 / usefulLifeMonths` per bulan, DENGAN
+    switch ke garis-lurus-atas-sisa (`bookValue / sisaBulan`) begitu itu lebih
+    besar dari DDB murni — standar akuntansi supaya nilai buku persis habis di
+    akhir umur (DDB murni tidak pernah mencapai nol tepat, mendekati asimtotik).
+  - **Jumlah Angka Tahun**: digeneralisasi ke satuan bulan (bukan tahun) supaya
+    kompatibel dengan job bulanan yang sudah ada — bobot bulan ke-m =
+    `usefulLifeMonths - m + 1`, dibagi `usefulLifeMonths*(usefulLifeMonths+1)/2`.
+    Totalnya otomatis pas sama dengan `cost` di akhir umur.
+  - Ketiganya sama-sama memposting aturan jurnal §4 yang SAMA ("Beban
+    Penyusutan / Akumulasi Penyusutan") — cuma `amount`-nya beda.
+- `monthsElapsed` (dipakai DDB & SYD) diturunkan dari HITUNGAN entry jurnal
+  "Penyusutan" sebelumnya untuk aset itu (`JournalEntry` where refType=
+  "fixed_asset" & type="Penyusutan") — bukan counter baru tersimpan, konsisten
+  dengan prinsip "turunan dari riwayat" yang sudah dipakai stok/dll.
+- **Bug ditemukan & diperbaiki saat verifikasi**: `runDepreciation()` sebelumnya
+  memfilter `lastDepreciatedPeriod: { not: period }`, yang di Prisma
+  dikompilasi jadi `<> period` SQL murni — NULL tidak pernah memenuhi itu, jadi
+  aset yang BELUM PERNAH disusutkan (state awal normal) selalu terlewati di
+  SETIAP metode, bukan cuma yang baru. Diperbaiki jadi `OR [{ lastDepreciatedPeriod:
+  null }, { lastDepreciatedPeriod: { not: period } }]`.
+- Endpoint tidak berubah (`POST /fixed-assets` terima `method` opsional,
+  `POST /fixed-assets/depreciation/run` apa adanya).
+
+### 11.2 Multi-currency
+
+- `PurchaseInvoice`/`SalesInvoice` dapat `currency` (default `"IDR"`) dan
+  `exchangeRate` (Decimal(18,4), default 1, Rupiah per 1 unit `currency`,
+  diisi MANUAL pada tanggal transaksi — bukan rate-table/API, sesuai cara
+  Accurate desktop bekerja & instruksi tugas). `dpp`/`ppn`/`total` TETAP
+  Rupiah (invariant "uang selalu integer rupiah" di §1 tidak diubah) — untuk
+  faktur mata uang asing, field itu adalah hasil konversi dari jumlah asing
+  ke Rupiah pada `exchangeRate`. `SalesInvoiceLine.unitPrice/amount` sengaja
+  TETAP dalam `currency` apa adanya (bukan dikonversi) — selaras juga dengan
+  aturan DPP/PPN Faktur Pajak yang wajib Rupiah legal.
+- **Selisih kurs terealisasi**: `JournalService.postCustomerReceipt`/
+  `postSupplierPayment` sekarang terima parameter opsional (Rupiah yang
+  DIBOOKING saat faktur dibuat, default = jumlah kas — jadi tidak berubah
+  untuk faktur IDR biasa). `CashTransactionsService.create()` mengirim
+  `invoice.total` untuk faktur non-IDR; selisih dari jumlah kas yang
+  benar-benar diterima/dibayar otomatis diposting ke akun baru **Selisih
+  Kurs** (4-4200, tipe pendapatan — bisa didebit/dikredit tergantung
+  laba/rugi) dalam entry yang SAMA (tetap balance sendiri, tidak ada
+  langkah revaluasi terpisah).
+- `CashTransaction.exchangeRate` (opsional) — kurs saat pelunasan, murni
+  informational/audit; perhitungan selisih kurs TIDAK bergantung padanya
+  (diturunkan dari `amount` vs `invoice.total`, lebih robust).
+- **Judgment call**: PO/SO TIDAK diberi field currency — eksposur kurs dan
+  dampak jurnalnya sama-sama terjadi di titik faktur di sistem ini (PO/SO
+  tidak memposting jurnal), jadi cukup di situ, sesuai instruksi tugas
+  "keep this simple".
+
+### 11.3 Transaksi berulang (recurring transactions)
+
+- `RecurringTemplate`: `name`, `type` (sales_invoice | purchase_invoice),
+  `payload` (JSON — body DTO create invoice APA ADANYA, tanpa `date`),
+  `frequency` (monthly | weekly), `nextRunDate`, `isActive`.
+- `RecurringGeneratedDraft`: satu baris per kejadian generate (`payload` +
+  `templateRunDate` + status pending/confirmed/discarded).
+- **Kenapa generate TIDAK langsung membuat SalesInvoice/PurchaseInvoice**: di
+  sistem ini `create()` pada KEDUANYA selalu memposting jurnal seketika —
+  status "draft" pada SalesInvoice cuma label alur kerja, bukan "belum
+  diposting", dan PurchaseInvoice malah tidak punya status draft sama
+  sekali. Jadi satu-satunya cara jujur memenuhi "generate draft, jangan
+  auto-post" (instruksi tugas eksplisit: "never fully autonomous for money
+  movement") adalah TIDAK memanggil `create()` sampai manusia menekan
+  confirm — `generateDue()` cuma menulis baris `RecurringGeneratedDraft`
+  (payload + tanggal terselesaikan, belum ada nomor dokumen/jurnal sama
+  sekali) dan memajukan `nextRunDate`.
+- `POST /recurring-templates/run-due` — SATU draft per panggilan per
+  template jatuh tempo (bukan mengejar semua periode terlewat sekaligus),
+  supaya template yang lama tidak dijalankan mendadak menghasilkan banyak
+  draft; panggilan berulang (cron eksternal, atau manual) mengejar satu-satu.
+- `POST /recurring-templates/drafts/:id/confirm` — BARU di sini dokumen
+  sungguhan dibuat (lewat `SalesInvoicesService.create()`/
+  `PurchaseInvoicesService.create()` yang SAMA persis dengan endpoint biasa,
+  payload divalidasi ulang lewat DTO/class-validator sebelum dipanggil),
+  atau `.../discard` untuk draft yang tidak jadi dipakai.
+- Endpoint lain: `GET/POST/PATCH/DELETE /recurring-templates`,
+  `GET /recurring-templates/drafts?status=`.
+
+### 11.4 Import/Export CSV
+
+- `backend/src/common/csv.util.ts` — parser/writer CSV tulisan tangan
+  (RFC 4180-ringan: quoting, CRLF/LF, field ber-koma/kutip). Tidak ada
+  dependency CSV di `package.json` sebelumnya dan kebutuhannya sederhana
+  (baris flat), jadi tidak ditambah dependency baru.
+- **Import** (upsert per kolom `code`, satu baris gagal tidak menggagalkan
+  baris lain — dikumpulkan di `errors` dengan nomor baris):
+  `POST /items/import`, `POST /partners/import`.
+- **Export**: `GET /items/export/csv`, `GET /partners/export/csv` (`?type=`),
+  `GET /purchase-invoices/export/csv`, `GET /sales-invoices/export/csv`,
+  `GET /stock-moves/export/csv`.
+- Frontend: komponen `ImportExportBar` (`frontend/src/components/
+  ImportExport.jsx`) dipakai di halaman **Barang & Jasa** (baru,
+  `pages/BarangJasa.jsx`) dan **Mitra** (baru, `pages/Mitra.jsx`, dipakai
+  untuk menu Pemasok DAN Pelanggan lewat prop `type`) — keduanya sebelumnya
+  cuma Placeholder; **Faktur Penjualan** (`InvoiceList.jsx`, tombol export)
+  dan **Gudang & Transfer** (`Persediaan.jsx`, export mutasi stok). **Judgment
+  call**: **Faktur Pembelian** juga sebelumnya cuma Placeholder DAN tidak
+  punya alur pembuatan di frontend sama sekali (faktur pembelian dibuat
+  ditautkan ke PO) — dibuat halaman list read-only baru (`pages/
+  PurchaseInvoiceList.jsx`) dengan tombol export saja, bukan form
+  pembuatan penuh (di luar cakupan "tombol Import/Export dasar").
+- Barcode: field data murni `Item.barcode` (opsional) ditambahkan sekalian
+  (murah, disebut eksplisit boleh di instruksi tugas) — TIDAK ada integrasi
+  hardware scanner (di luar cakupan web app).
+
+### 11.5 Approval Purchase Order
+
+- `PurchaseOrder.approvedBy`/`approvedAt` (nullable). `PATCH
+  /purchase-orders/:id/approve` (role admin/hrd_keuangan — sama dengan
+  tier HRD kasbon, single-level, TIDAK dibuat generic approval engine baru
+  sesuai instruksi tugas) — hanya untuk PO berstatus draft, menolak
+  approve ulang.
+- Transisi status yang sudah ada (`updateStatus()`, §10.4) sekarang
+  menolak `draft -> sent` kalau `approvedBy` masih kosong. `draft ->
+  cancelled` tetap bebas (membatalkan PO yang belum pernah dikirim tidak
+  butuh approval).
+
+### 11.6 Audit trail
+
+- `AuditLog`: `actorId`, `action` (string bebas: post/void/approve/reject/
+  cancel/confirm/discard/close/reopen/clear/bounce/status_change),
+  `entityType`, `entityId`, `before`/`after` (JSON), `at`.
+- Satu titik tulis: `AuditLogService.record()` (`backend/src/common/
+  audit-log/`), modul `@Global()` supaya tiap service yang butuh cukup
+  inject tanpa daftar di `imports` masing-masing. Terima parameter `db`
+  opsional (pola sama dengan `JournalService`/`CostingService`) supaya
+  baris audit atomik dengan transaksi perubahan dokumennya.
+  `before`/`after` disaring lewat serialize BigInt-safe (uang selalu
+  BigInt di sistem ini, `JSON.stringify` biasa akan error tanpa replacer)
+  sebelum disimpan ke kolom JSON.
+- Dipasang di titik status-berubah pada modul yang sudah ada: PurchaseOrder
+  (transisi status, approve), PurchaseInvoice/SalesInvoice (post-saat-
+  create, void), CashAdvance (tier1 decide, decide final), ChequeGiro
+  (clear, bounce), ClosedPeriod (close, reopen), WorkOrder (transisi
+  status termasuk posting produksi), RecurringTemplate (confirm/discard
+  draft) — BUKAN interceptor level-ORM yang mencatat SETIAP edit field
+  (berlebihan untuk cakupan ini, instruksi tugas eksplisit).
+- `GET /audit-log?entityType=&entityId=` (admin/hrd_keuangan) — riwayat
+  untuk satu dokumen.
+
+### 11.7 Costing — verifikasi FEFO untuk item ber-kedaluwarsa
+
+- Diverifikasi (bukan diasumsikan): `CostingService.consumeFifoLayers()`
+  SEBELUM pass ini cuma mengurutkan konsumsi layer FIFO berdasarkan
+  `inDate`/`id` ascending — `expiryDate` diabaikan sama sekali, dan malah
+  belum disimpan di `stock_layer` sama sekali (cuma ada di `stock_move`).
+- Ditambahkan: `Item.tracksExpiry` (default false, opt-in per item) dan
+  `StockLayer.batchNo`/`expiryDate` (diisi dari param `stockIn()` yang
+  sudah ada). `consumeFifoLayers()` sekarang mengurutkan
+  `[expiryDate asc nulls last, inDate asc, id asc]` kalau
+  `item.tracksExpiry` true (FEFO — first-expired-first-out), atau
+  `[inDate asc, id asc]` seperti semula kalau false (FIFO murni, TIDAK ada
+  perubahan perilaku untuk mayoritas item yang tidak mengaktifkan
+  tracking ini).
+- Diverifikasi: stock-in Batch A (masuk duluan, kedaluwarsa jauh, biaya
+  1000) lalu Batch B (masuk belakangan, kedaluwarsa lebih dekat, biaya
+  2000) untuk item FIFO+tracksExpiry, lalu stock-out — hasil unitCost =
+  2000 (Batch B), membuktikan FEFO benar-benar dipakai (FIFO murni akan
+  memilih Batch A/biaya 1000).
+
+### 11.8 Print-out — kelengkapan field Faktur Pajak (Coretax, PER-11/PJ/2025)
+
+- Diperiksa via web search (riset publik DJP Coretax, bukan diasumsikan)
+  terhadap template Faktur Penjualan yang ada. Dua celah kepatuhan
+  ditemukan & diperbaiki:
+  1. `SalesInvoice.taxInvoiceNo` (Nomor Faktur Pajak/NSFP resmi terbitan
+     Coretax — format 17 digit sejak PER-11/PJ/2025) tersimpan tapi TIDAK
+     PERNAH dicetak di mana pun — cuma nomor internal (`no`) yang tampil.
+     Sekarang dicetak sebagai "No. Faktur Pajak" kalau terisi.
+  2. NPWP pembeli (wajib per PER-11/PJ/2025 pasal 33) — `Partner.npwp`
+     sudah ada tapi tidak ditampilkan di faktur. Sekarang dicetak di blok
+     pelanggan.
+- Perbaikan tambahan di luar sekadar field hilang: kop dokumen bersama
+  (`renderDocument()`, `printing/layout.util.ts`, dipakai SEMUA template
+  cetak) sebelumnya selalu mencetak SATU NPWP brand yang di-hardcode,
+  padahal sistem ini multi-company (§9.6) dan tiap `Company` punya
+  `npwp` sendiri — salah untuk company manapun selain default.
+  `renderDocument()` sekarang terima seller override opsional;
+  `SalesInvoicesService.renderPdf()` mengirim `Company.npwp` faktur itu.
+  Template lain (PO/BAST/Slip Gaji/Surat Jalan) tidak terpengaruh — tetap
+  brand default seperti semula karena tidak mengirim override.
+- NPWP penjual di kop, breakdown DPP/PPN, dan nama penandatangan di blok
+  preparer sudah ada/benar sebelumnya — tidak disentuh.
+
+Sumber riset: dokumentasi field wajib Faktur Pajak Coretax (PER-11/PJ/2025
+pasal 33) dan format NSFP 17-digit terkini.
