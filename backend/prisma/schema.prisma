@@ -330,6 +330,16 @@ model Item {
   lastCost      BigInt?       @map("last_cost")
   // Persediaan §1 (gap module) — default average: lihat catatan di enum CostingMethod.
   costingMethod CostingMethod @default(average) @map("costing_method")
+  // §11 data design, item 7 — kalau true DAN costingMethod = fifo, konsumsi stok
+  // (CostingService.consumeFifoLayers) dipesan FEFO (first-expired-first-out,
+  // expiryDate ascending) bukan FIFO murni (inDate ascending) — barang yang paling
+  // dekat kedaluwarsa keluar duluan, praktik standar untuk barang ber-tanggal
+  // kedaluwarsa (bukan cuma FIFO, yang cuma memperhatikan urutan masuk). Item
+  // tanpa expiry tracking (mayoritas) tetap FIFO murni seperti semula.
+  tracksExpiry  Boolean       @default(false) @map("tracks_expiry")
+  // Barcode fisik (opsional) — field data murni, TIDAK ada integrasi hardware
+  // scanner (di luar cakupan web app ini, lihat laporan akhir tugas ini).
+  barcode       String?
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
   createdBy     Int?          @map("created_by")
@@ -780,6 +790,10 @@ model StockLayer {
   qtyRemaining Decimal   @map("qty_remaining") @db.Decimal(14, 3)
   unitCost     BigInt    @map("unit_cost")
   inDate       DateTime  @map("in_date")
+  // §11 data design, item 7 — dibawa dari stock_move stock-in yang membuka layer
+  // ini, dipakai untuk memesan ulang konsumsi FEFO (lihat Item.tracksExpiry).
+  batchNo      String?   @map("batch_no")
+  expiryDate   DateTime? @map("expiry_date")
   createdAt    DateTime  @default(now()) @map("created_at")
 
   @@index([itemId, warehouseId])

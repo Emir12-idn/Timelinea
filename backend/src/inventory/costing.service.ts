@@ -100,13 +100,29 @@ export class CostingService {
     return this.averageCost(db, itemId, warehouseId);
   }
 
-  /** Konsumsi layer FIFO tertua dulu; mengembalikan biaya rata-rata tertimbang dari qty yang benar-benar terkonsumsi. */
-  private async consumeFifoLayers(db: Db, itemId: number, warehouseId: number, qty: Prisma.Decimal): Promise<bigint> {
+  /**
+   * Konsumsi layer FIFO/FEFO; mengembalikan biaya rata-rata tertimbang dari qty
+   * yang benar-benar terkonsumsi. §11 data design, item 7 — kalau item ini
+   * `tracksExpiry`, urutan konsumsi FEFO (expiryDate ascending, nulls last dulu
+   * baru inDate/id sebagai tie-break) bukan FIFO murni (inDate ascending) — lihat
+   * catatan di Item.tracksExpiry (schema.prisma) untuk alasannya. Item tanpa
+   * expiry tracking (mayoritas) tetap FIFO murni seperti semula (perilaku tidak
+   * berubah untuk mereka).
+   */
+  private async consumeFifoLayers(
+    db: Db,
+    itemId: number,
+    warehouseId: number,
+    qty: Prisma.Decimal,
+    tracksExpiry: boolean,
+  ): Promise<bigint> {
     let remaining = qty;
     let totalCost = 0n;
     const layers = await db.stockLayer.findMany({
       where: { itemId, warehouseId, qtyRemaining: { gt: 0 } },
-      orderBy: [{ inDate: "asc" }, { id: "asc" }],
+      orderBy: tracksExpiry
+        ? [{ expiryDate: { sort: "asc", nulls: "last" } }, { inDate: "asc" }, { id: "asc" }]
+        : [{ inDate: "asc" }, { id: "asc" }],
     });
     for (const layer of layers) {
       if (remaining.lte(0)) break;
@@ -152,6 +168,8 @@ export class CostingService {
           qtyRemaining: params.qty,
           unitCost: params.unitCost,
           inDate: params.date,
+          batchNo: params.batchNo,
+          expiryDate: params.expiryDate,
         },
       });
     }
@@ -176,7 +194,7 @@ export class CostingService {
 
     const unitCost =
       item.costingMethod === "fifo"
-        ? await this.consumeFifoLayers(db, params.itemId, params.warehouseId, qty)
+        ? await this.consumeFifoLayers(db, params.itemId, params.warehouseId, qty, item.tracksExpiry)
         : await this.averageCost(db, params.itemId, params.warehouseId);
 
     const move = await db.stockMove.create({

@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
 import { CostingMethod, ItemType } from "@prisma/client";
 
 export class CreateItemDto {
@@ -36,4 +36,14 @@ export class CreateItemDto {
   @IsOptional()
   @IsEnum(CostingMethod)
   costingMethod?: CostingMethod;
+
+  /** §11 data design, item 7 — aktifkan konsumsi FEFO (bukan FIFO murni) untuk item FIFO ini. */
+  @IsOptional()
+  @IsBoolean()
+  tracksExpiry?: boolean;
+
+  /** Barcode fisik (opsional, data murni — tidak ada integrasi scanner). */
+  @IsOptional()
+  @IsString()
+  barcode?: string;
 }
