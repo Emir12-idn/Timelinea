@@ -7,6 +7,9 @@ import { COA_CODE } from "../../accounting/journal/coa-codes";
 import { CostingService } from "../../inventory/costing.service";
 import { AuditLogService } from "../../common/audit-log/audit-log.service";
 import { toCsv } from "../../common/csv.util";
+import { PdfService } from "../../printing/pdf.service";
+import { fakturPembelianHtml } from "../../printing/templates/faktur-pembelian.template";
+import { displayName } from "../../auth/role-label.util";
 import { CreatePurchaseInvoiceDto } from "./dto/create-purchase-invoice.dto";
 
 const PURCHASE_INVOICE_EXPORT_COLUMNS = ["no", "date", "supplierName", "poNo", "dpp", "ppn", "total", "currency", "exchangeRate", "status", "dueDate"];
@@ -19,6 +22,7 @@ export class PurchaseInvoicesService {
     private journal: JournalService,
     private costing: CostingService,
     private auditLog: AuditLogService,
+    private pdf: PdfService,
   ) {}
 
   findAll() {
@@ -217,6 +221,28 @@ export class PurchaseInvoicesService {
       );
       return voided;
     });
+  }
+
+  /**
+   * §13 data design — cetak Faktur Pembelian, mengikuti pola persis
+   * `SalesInvoicesService.renderPdf()`: NPWP company yang mencatat faktur
+   * (bukan selalu brand default) + nama pembuat faktur dari akun yang
+   * login. Baris item datang dari `po.lines` (findOne() sudah include-nya).
+   */
+  async renderPdf(id: number): Promise<Buffer> {
+    const invoice = await this.findOne(id);
+    const [company, preparer] = await Promise.all([
+      invoice.companyId
+        ? this.prisma.company.findUnique({ where: { id: invoice.companyId } })
+        : this.prisma.company.findFirst({ where: { isDefault: true, deletedAt: null } }),
+      invoice.createdBy ? this.prisma.user.findUnique({ where: { id: invoice.createdBy } }) : null,
+    ]);
+    const html = fakturPembelianHtml({
+      ...invoice,
+      preparedByName: preparer ? displayName(preparer.name, preparer.role) : null,
+      sellerNpwp: company?.npwp ?? null,
+    });
+    return this.pdf.renderHtmlToPdf(html);
   }
 
   /** §11 data design, item 4 — export CSV daftar Faktur Pembelian. */

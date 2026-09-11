@@ -1,10 +1,40 @@
 import { useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, Printer, X } from "lucide-react";
 import { Card, PageHeader, Badge, Spinner, ErrorBanner, Field, inputCls, selectCls } from "../components/ui";
 import { ImportExportBar } from "../components/ImportExport";
 import { useApi } from "../lib/useApi";
-import { api } from "../api/client";
+import { api, fetchPdfObjectUrl } from "../api/client";
 import { rupiah, dateID } from "../lib/format";
+
+/** Tombol cetak per baris — pola sama persis dengan PrintPoButton di POList.jsx. */
+function PrintInvoiceButton({ id }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const openPdf = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const url = await fetchPdfObjectUrl(`/purchase-invoices/${id}/print`);
+      window.open(url, "_blank");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={openPdf}
+        disabled={busy}
+        className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+      >
+        <Printer size={13} /> {busy ? "…" : "PDF"}
+      </button>
+      {error && <div className="max-w-[10rem] text-right text-[10px] text-rose-600">{error}</div>}
+    </div>
+  );
+}
 
 /**
  * Faktur pembelian di sistem ini TIDAK punya baris item sendiri (lihat
@@ -246,6 +276,7 @@ export default function PurchaseInvoiceList() {
                   <th className="px-4 py-3">No PO</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3 text-right">Cetak</th>
                 </tr>
               </thead>
               <tbody>
@@ -257,10 +288,11 @@ export default function PurchaseInvoiceList() {
                     <td className="px-4 py-3 text-slate-500">{r.po?.no || "-"}</td>
                     <td className="px-4 py-3"><Badge status={r.status} /></td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-700">{rupiah(r.total)}</td>
+                    <td className="px-4 py-3 text-right"><PrintInvoiceButton id={r.id} /></td>
                   </tr>
                 ))}
                 {(inv.data || []).length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">Belum ada Faktur Pembelian.</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-400">Belum ada Faktur Pembelian.</td></tr>
                 )}
               </tbody>
             </table>

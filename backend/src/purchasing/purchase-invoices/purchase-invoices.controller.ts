@@ -38,4 +38,11 @@ export class PurchaseInvoicesController {
   voidInvoice(@Param("id", ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
     return this.service.voidInvoice(id, user.id);
   }
+
+  @Get(":id/print")
+  async print(@Param("id", ParseIntPipe) id: number, @Res() res: Response) {
+    const pdf = await this.service.renderPdf(id);
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="faktur-pembelian-${id}.pdf"` });
+    res.send(pdf);
+  }
 }
