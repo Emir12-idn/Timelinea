@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
-import { lineAmount } from "../../common/money.util";
+import { lineAmount, percentOf } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { COA_CODE } from "../../accounting/journal/coa-codes";
 import { CostingService } from "../../inventory/costing.service";
@@ -62,8 +62,9 @@ export class PurchaseReturnsService {
     const itemById = new Map(items.map((i) => [i.id, i]));
 
     const lines = dto.lines.map((l) => ({ ...l, amount: lineAmount(BigInt(l.unitPrice), l.qty) }));
+    // Sum-then-round di level dokumen, sama seperti Faktur Pembelian (§10 data design).
     const dpp = lines.reduce((sum, l) => sum + l.amount, 0n);
-    const ppn = BigInt(Math.round(Number(dpp) * PPN_RATE));
+    const ppn = percentOf(dpp, PPN_RATE);
     const total = dpp + ppn;
 
     return this.prisma.$transaction(async (tx) => {

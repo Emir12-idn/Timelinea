@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NumberingService } from "../../common/numbering.service";
-import { lineAmount } from "../../common/money.util";
+import { lineAmount, percentOf } from "../../common/money.util";
 import { JournalService } from "../../accounting/journal/journal.service";
 import { PdfService } from "../../printing/pdf.service";
 import { fakturPenjualanHtml } from "../../printing/templates/faktur-penjualan.template";
@@ -59,8 +59,15 @@ export class SalesInvoicesService {
       partNo: l.partNo ?? (l.itemId ? itemCodeById.get(l.itemId) : undefined),
       amount: lineAmount(BigInt(l.unitPrice), l.qty),
     }));
+    // DPP total dulu (jumlah baris, sudah bulat rupiah masing-masing), baru PPN
+    // dihitung & dibulatkan SEKALI di level faktur — bukan per baris. Ini pola
+    // pembulatan yang didokumentasikan DJP (PER-11/PJ/2025, pembulatan ke rupiah
+    // penuh half-up) dan dipakai Accurate ("Rounded Upper" per invoice, bukan per
+    // baris) — lihat §10 data design. `percentOf` (money.util) dipakai supaya
+    // pembulatannya konsisten (Decimal half-up) dengan util yang sama dipakai di
+    // tempat lain, bukan Math.round(Number(...)) yang rawan presisi float.
     const dpp = lines.reduce((sum, l) => sum + l.amount, 0n);
-    const ppn = BigInt(Math.round(Number(dpp) * PPN_RATE));
+    const ppn = percentOf(dpp, PPN_RATE);
     const pph = BigInt(dto.pph ?? 0);
     const total = dpp + ppn;
 
