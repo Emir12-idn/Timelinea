@@ -979,6 +979,14 @@ model Account {
   type      AccountType
   taxCode   String?     @map("tax_code") // Kode Akun Pajak (KAP) Coretax, PER-10/PJ/2024
   taxName   String?     @map("tax_name")
+  // §10 data design, item 5 — dipakai untuk mengelompokkan Neraca jadi Aset
+  // Lancar/Tidak Lancar dan Kewajiban Lancar/Jangka Panjang (struktur PSAK 1),
+  // bukan cuma daftar rata semua akun aset/kewajiban. Hanya relevan untuk akun
+  // bertipe aset/kewajiban; default true (lancar) karena mayoritas akun di COA
+  // dasar sistem ini memang lancar — akun yang jelas tidak lancar (Aktiva Tetap,
+  // Akumulasi Penyusutan) ditandai false di seed.ts. COA sengaja bisa diedit per
+  // perusahaan (§5), jadi ini field data, bukan pola nama/kode akun yang di-hardcode.
+  isCurrent Boolean     @default(true) @map("is_current")
   parentId  Int?        @map("parent_id")
   parent    Account?    @relation("AccountParent", fields: [parentId], references: [id])
   children  Account[]   @relation("AccountParent")

@@ -59,6 +59,21 @@ function AccountTable({ title, rows, totalLabel, total }) {
   );
 }
 
+function SubtotalRow({ label, amount, emphasis }) {
+  return (
+    <Card className={`p-3.5 ${emphasis ? "border-blue-200 bg-blue-50/50" : ""}`}>
+      <div className="flex items-center justify-between">
+        <div className={`text-sm ${emphasis ? "font-semibold text-slate-800" : "font-medium text-slate-600"}`}>{label}</div>
+        <div className={`tabular-nums ${emphasis ? "text-base font-bold text-slate-800" : "text-sm font-semibold text-slate-700"}`}>
+          {rupiah(amount)}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// Struktur multi-step PSAK: Pendapatan -> HPP -> Laba Kotor -> Beban Operasional ->
+// Laba Usaha -> Laba Bersih (bukan cuma dua tabel rata Pendapatan/Beban).
 function LabaRugi() {
   const [from, setFrom] = useState(START_OF_YEAR);
   const [to, setTo] = useState(TODAY);
@@ -73,10 +88,13 @@ function LabaRugi() {
       </div>
       <ErrorBanner message={r.error} />
       {r.loading ? <Spinner /> : r.data && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3">
           <AccountTable title="Pendapatan" rows={r.data.pendapatan} totalLabel="Total Pendapatan" total={r.data.totalPendapatan} />
-          <AccountTable title="Beban" rows={r.data.beban} totalLabel="Total Beban" total={r.data.totalBeban} />
-          <Card className="p-4 lg:col-span-2">
+          <AccountTable title="Harga Pokok Penjualan" rows={r.data.hpp} totalLabel="Total HPP" total={r.data.totalHpp} />
+          <SubtotalRow label="Laba Kotor" amount={r.data.labaKotor} emphasis />
+          <AccountTable title="Beban Operasional" rows={r.data.bebanOperasional} totalLabel="Total Beban Operasional" total={r.data.totalBebanOperasional} />
+          <SubtotalRow label="Laba Usaha" amount={r.data.labaUsaha} emphasis />
+          <Card className="p-4">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-700">Laba (Rugi) Bersih</div>
               <div className={`text-lg font-bold tabular-nums ${bersih >= 0 ? "text-green-700" : "text-rose-700"}`}>
@@ -90,6 +108,8 @@ function LabaRugi() {
   );
 }
 
+// Struktur PSAK 1: Aset & Kewajiban dikelompokkan Lancar/Tidak Lancar (bukan satu
+// daftar rata) — lihat ReportsService.neraca() (Account.isCurrent).
 function Neraca() {
   const [asOf, setAsOf] = useState(TODAY);
   const r = useApi(`/reports/neraca?asOf=${asOf}`);
@@ -103,9 +123,14 @@ function Neraca() {
       <ErrorBanner message={r.error} />
       {r.loading ? <Spinner /> : r.data && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <AccountTable title="Aset" rows={r.data.aset} totalLabel="Total Aset" total={r.data.totalAset} />
-          <div className="space-y-4">
-            <AccountTable title="Kewajiban" rows={r.data.kewajiban} totalLabel="Total Kewajiban" total={r.data.totalKewajiban} />
+          <div className="space-y-3">
+            <AccountTable title="Aset Lancar" rows={r.data.asetLancar} totalLabel="Total Aset Lancar" total={r.data.totalAsetLancar} />
+            <AccountTable title="Aset Tidak Lancar" rows={r.data.asetTidakLancar} totalLabel="Total Aset Tidak Lancar" total={r.data.totalAsetTidakLancar} />
+            <SubtotalRow label="Total Aset" amount={r.data.totalAset} emphasis />
+          </div>
+          <div className="space-y-3">
+            <AccountTable title="Kewajiban Lancar" rows={r.data.kewajibanLancar} totalLabel="Total Kewajiban Lancar" total={r.data.totalKewajibanLancar} />
+            <AccountTable title="Kewajiban Jangka Panjang" rows={r.data.kewajibanJangkaPanjang} totalLabel="Total Kewajiban Jangka Panjang" total={r.data.totalKewajibanJangkaPanjang} />
             <AccountTable title="Ekuitas" rows={r.data.ekuitas} totalLabel="Total Ekuitas" total={r.data.totalEkuitas} />
           </div>
           <Card className="p-4 lg:col-span-2">

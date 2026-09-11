@@ -6,15 +6,18 @@ const prisma = new PrismaClient();
 // docs/DATA_DESIGN.md §5 — COA Coretax. The four accounts marked "extra" aren't
 // in §5's table but are required by the auto-journal rules in §4 (fixed assets /
 // BPJS) for the entries to balance; see accounting/journal/coa-codes.ts.
-const COA: { code: string; name: string; type: AccountType; taxCode?: string; taxName?: string }[] = [
+// isCurrent (default true = Aset/Kewajiban Lancar): dipakai ReportsService.neraca()
+// untuk mengelompokkan Neraca sesuai struktur PSAK 1 (§10 data design, item 5).
+// Cuma Aktiva Tetap & Akumulasi Penyusutan yang jelas tidak lancar di COA dasar ini.
+const COA: { code: string; name: string; type: AccountType; taxCode?: string; taxName?: string; isCurrent?: boolean }[] = [
   { code: "1-1100", name: "Kas", type: "aset" },
   { code: "1-1200", name: "Bank", type: "aset" },
   { code: "1-1300", name: "Piutang Usaha", type: "aset" },
   { code: "1-1400", name: "Persediaan Bahan", type: "aset" },
   { code: "1-1500", name: "Piutang Karyawan (Kasbon)", type: "aset" },
   { code: "1-1600", name: "PPN Masukan", type: "aset", taxCode: "411211", taxName: "PPN Dalam Negeri" },
-  { code: "1-1700", name: "Aktiva Tetap", type: "aset" }, // extra
-  { code: "1-1750", name: "Akumulasi Penyusutan", type: "aset" }, // extra
+  { code: "1-1700", name: "Aktiva Tetap", type: "aset", isCurrent: false }, // extra
+  { code: "1-1750", name: "Akumulasi Penyusutan", type: "aset", isCurrent: false }, // extra
   { code: "2-2100", name: "Utang Usaha", type: "kewajiban" },
   { code: "2-2200", name: "PPN Keluaran", type: "kewajiban", taxCode: "411211", taxName: "PPN Dalam Negeri" },
   { code: "2-2300", name: "Utang PPh Pasal 21", type: "kewajiban", taxCode: "411121", taxName: "PPh Pasal 21" },

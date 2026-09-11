@@ -1,19 +1,30 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { AccountType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { COA_CODE } from "../accounting/journal/coa-codes";
 
 interface AccountAgg {
   code: string;
   name: string;
   type: AccountType;
+  isCurrent: boolean;
   debit: bigint;
   credit: bigint;
 }
 
-function aggregateByAccount(lines: { debit: bigint; credit: bigint; account: { code: string; name: string; type: AccountType } }[]) {
+function aggregateByAccount(
+  lines: { debit: bigint; credit: bigint; account: { code: string; name: string; type: AccountType; isCurrent: boolean } }[],
+) {
   const byAccount = new Map<string, AccountAgg>();
   for (const l of lines) {
-    const cur = byAccount.get(l.account.code) ?? { code: l.account.code, name: l.account.name, type: l.account.type, debit: 0n, credit: 0n };
+    const cur = byAccount.get(l.account.code) ?? {
+      code: l.account.code,
+      name: l.account.name,
+      type: l.account.type,
+      isCurrent: l.account.isCurrent,
+      debit: 0n,
+      credit: 0n,
+    };
     cur.debit += l.debit;
     cur.credit += l.credit;
     byAccount.set(l.account.code, cur);
@@ -72,12 +83,33 @@ export class ReportsService {
     const totalPendapatan = pendapatan.reduce((s, a) => s + a.amount, 0n);
     const totalBeban = beban.reduce((s, a) => s + a.amount, 0n);
 
+    // Struktur multi-step PSAK (§10 data design, item 5): Pendapatan -> HPP -> Laba
+    // Kotor -> Beban Operasional -> Laba Usaha -> (Pendapatan/Beban Lain-lain,
+    // belum ada akun terpisah untuk itu di COA dasar sistem ini, jadi Laba Usaha =
+    // Laba Bersih untuk sekarang) -> Laba Bersih. `hpp` dipisah dari `beban` lewat
+    // COA_CODE.HPP (satu-satunya akun HPP di COA) — bukan menambah field baru ke
+    // Account, karena "operasional vs HPP" sudah bisa dibedakan dari kode akun yang
+    // sudah dipakai aturan jurnal §4. `pendapatan`/`beban`/`totalBeban`/
+    // `labaRugiBersih` tetap ada apa adanya (kompatibel dengan konsumen lama).
+    const hpp = beban.filter((a) => a.code === COA_CODE.HPP);
+    const bebanOperasional = beban.filter((a) => a.code !== COA_CODE.HPP);
+    const totalHpp = hpp.reduce((s, a) => s + a.amount, 0n);
+    const totalBebanOperasional = bebanOperasional.reduce((s, a) => s + a.amount, 0n);
+    const labaKotor = totalPendapatan - totalHpp;
+    const labaUsaha = labaKotor - totalBebanOperasional;
+
     return {
       from: from ?? null,
       to: to ?? null,
       pendapatan,
-      beban,
       totalPendapatan,
+      hpp,
+      totalHpp,
+      labaKotor,
+      bebanOperasional,
+      totalBebanOperasional,
+      labaUsaha,
+      beban,
       totalBeban,
       labaRugiBersih: totalPendapatan - totalBeban,
     };
@@ -97,10 +129,10 @@ export class ReportsService {
     const accounts = aggregateByAccount(lines);
     const aset = accounts
       .filter((a) => a.type === "aset")
-      .map((a) => ({ code: a.code, name: a.name, amount: a.debit - a.credit }));
+      .map((a) => ({ code: a.code, name: a.name, amount: a.debit - a.credit, isCurrent: a.isCurrent }));
     const kewajiban = accounts
       .filter((a) => a.type === "kewajiban")
-      .map((a) => ({ code: a.code, name: a.name, amount: a.credit - a.debit }));
+      .map((a) => ({ code: a.code, name: a.name, amount: a.credit - a.debit, isCurrent: a.isCurrent }));
     const modal = accounts
       .filter((a) => a.type === "ekuitas")
       .map((a) => ({ code: a.code, name: a.name, amount: a.credit - a.debit }));
@@ -113,14 +145,36 @@ export class ReportsService {
 
     const ekuitas = [...modal, { code: "-", name: "Laba (Rugi) Ditahan", amount: labaDitahan }];
 
+    // Struktur PSAK 1 (§10 data design, item 5): Aset & Kewajiban dikelompokkan
+    // Lancar/Tidak Lancar (klasifikasi `Account.isCurrent`, bukan cuma daftar
+    // rata). `aset`/`kewajiban`/`totalAset`/`totalKewajiban` tetap ada apa adanya
+    // (urutan lancar dulu baru tidak lancar — sudah begitu karena `aset` di atas
+    // tidak difilter ulang) untuk konsumen lama.
+    const asetLancar = aset.filter((a) => a.isCurrent);
+    const asetTidakLancar = aset.filter((a) => !a.isCurrent);
+    const kewajibanLancar = kewajiban.filter((a) => a.isCurrent);
+    const kewajibanJangkaPanjang = kewajiban.filter((a) => !a.isCurrent);
+
     const totalAset = aset.reduce((s, a) => s + a.amount, 0n);
+    const totalAsetLancar = asetLancar.reduce((s, a) => s + a.amount, 0n);
+    const totalAsetTidakLancar = asetTidakLancar.reduce((s, a) => s + a.amount, 0n);
     const totalKewajiban = kewajiban.reduce((s, a) => s + a.amount, 0n);
+    const totalKewajibanLancar = kewajibanLancar.reduce((s, a) => s + a.amount, 0n);
+    const totalKewajibanJangkaPanjang = kewajibanJangkaPanjang.reduce((s, a) => s + a.amount, 0n);
     const totalEkuitas = ekuitas.reduce((s, a) => s + a.amount, 0n);
 
     return {
       asOf: asOf ?? null,
+      asetLancar,
+      totalAsetLancar,
+      asetTidakLancar,
+      totalAsetTidakLancar,
       aset,
       totalAset,
+      kewajibanLancar,
+      totalKewajibanLancar,
+      kewajibanJangkaPanjang,
+      totalKewajibanJangkaPanjang,
       kewajiban,
       totalKewajiban,
       ekuitas,
