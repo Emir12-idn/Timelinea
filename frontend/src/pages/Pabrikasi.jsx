@@ -48,14 +48,14 @@ function NewBomForm({ items, onClose, onCreated }) {
         <div className="space-y-2">
           <div className="text-xs font-medium text-slate-500">Bahan Baku (per 1 unit produk)</div>
           {lines.map((l, i) => (
-            <div key={i} className="flex items-end gap-2">
-              <div className="flex-1">
+            <div key={i} className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[160px] flex-1">
                 <select value={l.materialItemId} onChange={(e) => updateLine(i, { materialItemId: e.target.value })} className={selectCls}>
                   {items.map((it) => <option key={it.id} value={it.id}>{it.code} — {it.name}</option>)}
                 </select>
               </div>
-              <input type="number" min="0.0001" step="0.0001" value={l.qtyPerUnit} onChange={(e) => updateLine(i, { qtyPerUnit: e.target.value })} className={`${inputCls} w-28`} placeholder="Qty/unit" />
-              <input value={l.uom} onChange={(e) => updateLine(i, { uom: e.target.value })} className={`${inputCls} w-20`} placeholder="Satuan" />
+              <input type="number" min="0.0001" step="0.0001" value={l.qtyPerUnit} onChange={(e) => updateLine(i, { qtyPerUnit: e.target.value })} className={`${inputCls} w-24 sm:w-28`} placeholder="Qty/unit" />
+              <input value={l.uom} onChange={(e) => updateLine(i, { uom: e.target.value })} className={`${inputCls} w-16 sm:w-20`} placeholder="Satuan" />
               <button type="button" onClick={() => removeLine(i)} className="rounded p-2 text-rose-500 hover:bg-rose-50"><Trash2 size={15} /></button>
             </div>
           ))}

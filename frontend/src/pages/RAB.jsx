@@ -39,10 +39,10 @@ function RabEditor({ projectId, initialLines, onSaved }) {
       <ErrorBanner message={error} />
       <div className="space-y-2">
         {lines.map((l, i) => (
-          <div key={i} className="flex items-end gap-2">
-            <input value={l.category || ""} onChange={(e) => updateLine(i, { category: e.target.value })} className={`${inputCls} w-32`} placeholder="Kategori" />
-            <input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} className={`${inputCls} flex-1`} placeholder="Deskripsi" />
-            <input type="number" min="0" value={l.plannedAmount} onChange={(e) => updateLine(i, { plannedAmount: e.target.value })} className={`${inputCls} w-40`} placeholder="Jumlah (Rp)" />
+          <div key={i} className="flex flex-wrap items-end gap-2">
+            <input value={l.category || ""} onChange={(e) => updateLine(i, { category: e.target.value })} className={`${inputCls} w-28 sm:w-32`} placeholder="Kategori" />
+            <input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} className={`${inputCls} min-w-[160px] flex-1`} placeholder="Deskripsi" />
+            <input type="number" min="0" value={l.plannedAmount} onChange={(e) => updateLine(i, { plannedAmount: e.target.value })} className={`${inputCls} w-32 sm:w-40`} placeholder="Jumlah (Rp)" />
             <button type="button" onClick={() => removeLine(i)} className="rounded p-2 text-rose-500 hover:bg-rose-50"><Trash2 size={15} /></button>
           </div>
         ))}
