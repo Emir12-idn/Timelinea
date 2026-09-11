@@ -16,12 +16,12 @@ const TABS = [
 
 function TabBar({ active, setActive }) {
   return (
-    <div className="mb-4 flex gap-1 border-b border-slate-200">
+    <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200">
       {TABS.map((t) => (
         <button
           key={t.id}
           onClick={() => setActive(t.id)}
-          className={`-mb-px border-b-2 px-3.5 py-2 text-sm font-medium ${
+          className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3.5 py-2 text-sm font-medium ${
             active === t.id ? "border-blue-800 text-blue-800" : "border-transparent text-slate-500 hover:text-slate-700"
           }`}
         >
@@ -36,23 +36,25 @@ function AccountTable({ title, rows, totalLabel, total }) {
   return (
     <Card className="p-4">
       <div className="mb-2 text-sm font-semibold text-slate-700">{title}</div>
-      <table className="w-full text-sm">
-        <tbody>
-          {rows.map((a, i) => (
-            <tr key={a.code + i} className="border-b border-slate-50">
-              <td className="py-1.5 text-slate-500">{a.name}</td>
-              <td className="py-1.5 text-right tabular-nums text-slate-700">{rupiah(a.amount)}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <tbody>
+            {rows.map((a, i) => (
+              <tr key={a.code + i} className="border-b border-slate-50">
+                <td className="py-1.5 text-slate-500">{a.name}</td>
+                <td className="py-1.5 text-right tabular-nums text-slate-700">{rupiah(a.amount)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={2} className="py-3 text-center text-xs text-slate-300">Tidak ada data</td></tr>
+            )}
+            <tr className="font-semibold text-slate-800">
+              <td className="py-2">{totalLabel}</td>
+              <td className="py-2 text-right tabular-nums">{rupiah(total)}</td>
             </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr><td colSpan={2} className="py-3 text-center text-xs text-slate-300">Tidak ada data</td></tr>
-          )}
-          <tr className="font-semibold text-slate-800">
-            <td className="py-2">{totalLabel}</td>
-            <td className="py-2 text-right tabular-nums">{rupiah(total)}</td>
-          </tr>
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }

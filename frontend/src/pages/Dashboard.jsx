@@ -45,22 +45,24 @@ export default function Dashboard() {
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="p-4">
           <div className="mb-3 inline-flex rounded bg-amber-400 px-2.5 py-1 text-xs font-bold text-blue-950">Status Pesanan Pembelian</div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                <th className="pb-2 font-medium">Status</th>
-                <th className="pb-2 text-right font-medium">Jumlah</th>
-              </tr>
-            </thead>
-            <tbody>
-              {poByStatus.map(([s, n]) => (
-                <tr key={s} className="border-b border-slate-100 last:border-0">
-                  <td className="py-2.5"><Badge status={s} /></td>
-                  <td className="py-2.5 text-right font-semibold text-slate-700 tabular-nums">{n}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                  <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 text-right font-medium">Jumlah</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {poByStatus.map(([s, n]) => (
+                  <tr key={s} className="border-b border-slate-100 last:border-0">
+                    <td className="py-2.5"><Badge status={s} /></td>
+                    <td className="py-2.5 text-right font-semibold text-slate-700 tabular-nums">{n}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
         <Card className="p-4">
           <div className="mb-3 inline-flex rounded bg-blue-900 px-2.5 py-1 text-xs font-bold text-white">Faktur Terbaru</div>

@@ -28,23 +28,25 @@ export default function BuktiJurnal() {
                 <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{e.type}</span>
                 <span className="ml-auto text-xs text-slate-400">Ref: {e.refNo || `${e.refType}#${e.refId}`}</span>
               </div>
-              <table className="w-full text-sm">
-                <tbody>
-                  {e.lines.map((l) => (
-                    <tr key={l.id} className="border-b border-slate-50 last:border-0">
-                      <td className="px-4 py-2 font-mono text-xs text-slate-400">{l.account?.code}</td>
-                      <td className={`py-2 pr-4 ${Number(l.debit) ? "text-slate-700" : "pl-6 text-slate-600"}`}>{l.account?.name}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-slate-700">{Number(l.debit) ? rupiah(l.debit) : ""}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-slate-700">{Number(l.credit) ? rupiah(l.credit) : ""}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {e.lines.map((l) => (
+                      <tr key={l.id} className="border-b border-slate-50 last:border-0">
+                        <td className="px-4 py-2 font-mono text-xs text-slate-400">{l.account?.code}</td>
+                        <td className={`py-2 pr-4 ${Number(l.debit) ? "text-slate-700" : "pl-6 text-slate-600"}`}>{l.account?.name}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-700">{Number(l.debit) ? rupiah(l.debit) : ""}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-700">{Number(l.credit) ? rupiah(l.credit) : ""}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-50 font-semibold">
+                      <td colSpan={2} className="px-4 py-2 text-right text-xs text-slate-500">Total</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-800">{rupiah(totD)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-800">{rupiah(totK)}</td>
                     </tr>
-                  ))}
-                  <tr className="bg-slate-50 font-semibold">
-                    <td colSpan={2} className="px-4 py-2 text-right text-xs text-slate-500">Total</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-800">{rupiah(totD)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-800">{rupiah(totK)}</td>
-                  </tr>
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
             </Card>
           );
         })}
