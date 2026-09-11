@@ -113,7 +113,32 @@ export class PurchaseOrdersService {
     if (!ALLOWED_TRANSITIONS[po.status].includes(status)) {
       throw new BadRequestException(`Tidak bisa mengubah status PO dari "${po.status}" ke "${status}"`);
     }
+    // §11 data design, item 5 — PO harus di-approve dulu sebelum bisa dikirim ke
+    // pemasok (draft -> sent). Cuma menjaga transisi INI; draft -> cancelled tetap
+    // bebas (membatalkan PO yang belum pernah dikirim tidak butuh approval).
+    if (status === "sent" && !po.approvedBy) {
+      throw new BadRequestException(`PO ${po.no} belum di-approve — approve dulu sebelum dikirim ke pemasok`);
+    }
     return this.prisma.purchaseOrder.update({ where: { id }, data: { status } });
+  }
+
+  /**
+   * Approve PO — single-level, role admin/hrd_keuangan (dijaga di controller).
+   * Hanya boleh selagi masih draft (belum dikirim/dibatalkan); approve ulang PO
+   * yang sudah di-approve ditolak (idempotency guard, bukan re-approve).
+   */
+  async approve(id: number, approvedBy: number) {
+    const po = await this.findOne(id);
+    if (po.status !== "draft") {
+      throw new BadRequestException(`Hanya PO berstatus draft yang bisa di-approve (status sekarang: "${po.status}")`);
+    }
+    if (po.approvedBy) {
+      throw new BadRequestException(`PO ${po.no} sudah di-approve sebelumnya`);
+    }
+    return this.prisma.purchaseOrder.update({
+      where: { id },
+      data: { approvedBy, approvedAt: new Date() },
+    });
   }
 
   async renderPdf(id: number): Promise<Buffer> {

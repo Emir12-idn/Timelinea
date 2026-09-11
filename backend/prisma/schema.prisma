@@ -427,6 +427,12 @@ model PurchaseOrder {
   project    Project?  @relation(fields: [projectId], references: [id])
   status     PoStatus  @default(draft)
   note       String?
+  // §11 data design, item 5 — approval workflow: PO harus di-approve dulu (role
+  // admin/hrd_keuangan) sebelum bisa pindah draft -> sent (dikirim ke pemasok).
+  // Single-level (bukan engine approval bertingkat generik) — pola sederhana yang
+  // sama semangatnya dengan tiered kasbon tapi tidak sekompleks itu, sesuai scope.
+  approvedBy Int?      @map("approved_by")
+  approvedAt DateTime? @map("approved_at")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
   createdBy  Int?      @map("created_by")
