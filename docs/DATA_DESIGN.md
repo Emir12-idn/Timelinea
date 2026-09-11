@@ -731,3 +731,123 @@ statis) — lihat riwayat commit cabang ini untuk detail tiap verifikasi.
 
 Sumber riset: dokumentasi field wajib Faktur Pajak Coretax (PER-11/PJ/2025
 pasal 33) dan format NSFP 17-digit terkini.
+
+---
+
+## 12. Pass keempat — tiga celah terakhir yang diketahui (lanjutan §9/§10/§11)
+
+Pemilik proyek mengonfirmasi eksplisit dua hal berikut **permanen di luar
+cakupan**, supaya pass berikutnya tidak menandainya lagi sebagai celah:
+
+- **Submission e-Faktur/Coretax langsung ke API DJP** — butuh registrasi
+  sertifikat elektronik resmi dengan otoritas pajak (dependency eksternal
+  nyata, bukan sesuatu yang bisa "dibangun" dari sisi aplikasi). Sistem ini
+  berhenti di kelengkapan FIELD faktur pajak (§11.8) — submission-nya sendiri
+  tetap manual lewat portal Coretax DJP.
+- **Re-arsitektur database-per-company** — `company_id`-based multi-tenancy
+  (satu database, difilter per company) adalah keputusan desain yang diterima,
+  bukan bug. §9.6 (laporan konsolidasi) sudah dibangun di atas asumsi ini.
+
+Bagian ini menutup tiga celah fungsional/verifikasi terakhir yang diketahui:
+
+### 12.1 Form pembuatan Faktur Pembelian
+
+`PurchaseInvoiceList.jsx` (dibuat §11.4) sebelumnya read-only (list + export
+CSV saja) — satu-satunya transaksi inti tanpa form pembuatan di frontend,
+padahal `POST /purchase-invoices` sudah menerima payload lengkap sejak §11.2
+(multi-currency). Ditambahkan `NewPurchaseInvoiceForm` mengikuti pola
+`NewPOForm`/`NewInvoiceForm` yang sudah ada, dengan satu perbedaan struktural
+disengaja: `purchase_invoice` TIDAK punya tabel baris sendiri (§3) — kalau
+ditautkan ke PO (`poId`), baris/stock-in datang OTOMATIS dari baris PO itu di
+backend, jadi form menampilkan baris PO tsb read-only (preview, bukan
+editor) dan membiarkan total/DPP/PPN diisi/ditimpa manual supaya cocok
+dengan angka di faktur fisik pemasok (bisa beda dari nilai PO). Pemilih PO
+dibatasi ke PO berstatus "sent" milik pemasok yang dipilih (kenyamanan UI —
+backend sendiri tidak mewajibkan `po.supplierId === dto.supplierId`).
+Field multi-currency (`currency`/`exchangeRate`, ada di API sejak §11.2)
+sekarang juga punya permukaan UI, sebelumnya API-only tanpa form manapun
+yang mengeksposnya.
+
+### 12.2 Kelengkapan audit trail
+
+`AuditLogService.record()` (§11.6) sebelumnya cuma dipasang di PO, PI/SI,
+CashAdvance, ChequeGiro, ClosedPeriod, WorkOrder, RecurringTemplate.
+Diperluas ke modul dengan aksi state-changing nyata yang tersisa, pola
+pemanggilan SAMA PERSIS (inject `AuditLogService`, panggil `record()` di
+`$transaction` yang sudah ada kalau ada):
+
+- **BAST**: `create` saat `POST /basts`, plus `print` saat
+  `GET /basts/:id/print` — BAST yang dicetak ulang berarti ada salinan fisik
+  baru beredar untuk ditandatangani, beda dari cetak PO/Faktur/Slip Gaji yang
+  lebih sering cuma arsip internal (makanya cetak dokumen LAIN tetap tidak
+  diaudit, judgment call disengaja).
+- **Slip Gaji**: `post` di `generate()` — kalkulasi uang (gross/BPJS/PPh21/
+  potongan/net) plus posting jurnal seketika, sama seperti alasan PI/SI.
+- **Retur Penjualan & Retur Pembelian**: `post` di `create()` — sama-sama
+  posting jurnal seketika begitu dibuat (tidak ada status draft).
+- **Rekonsiliasi Bank**: `match`/`unmatch` pada baris rekening koran (tidak
+  menyentuh jurnal — murni alat pencocokan — tapi tetap mengubah status
+  dokumen, jadi tetap diaudit); controller-nya sekarang menyuntik
+  `@CurrentUser()` yang sebelumnya tidak dibutuhkan.
+- **Aktiva Tetap**: `depreciation_run` per ASET per pemanggilan
+  `runDepreciation()` (satu baris audit per aset, bukan satu per batch run,
+  supaya `GET /audit-log?entityType=fixed_asset&entityId=N` tetap bisa
+  ditelusuri per aset).
+
+**Judgment call**: Absensi (clock-in/clock-out) sengaja TIDAK diaudit —
+volume tinggi, nilai forensik rendah (self-service harian, bukan dokumen
+atau pergerakan uang), sesuai izin eksplisit instruksi tugas untuk
+melewatinya dengan alasan.
+
+Diverifikasi langsung terhadap instance PostgreSQL lokal (bukan cuma review
+kode statis): membuat karyawan, generate slip gaji, membuat BAST, membuat
+Faktur Pembelian ber-PO, lalu mengonfirmasi tiap aksi menulis baris
+`AuditLog` yang diharapkan lewat `GET /audit-log`.
+
+### 12.3 Verifikasi visual PDF cetak
+
+Chromium tersedia di sandbox ini (Playwright-installed browser di
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`) — beda dari dua pass
+sebelumnya yang tidak bisa memverifikasi ini sama sekali. `PdfService` pakai
+`puppeteer-core` (bukan `puppeteer` dengan browser terbundel) dan membaca
+`PUPPETEER_EXECUTABLE_PATH`, jadi binary itu dipakai langsung tanpa
+mengubah kode — cuma konfigurasi environment lokal (`.env`, di-gitignore,
+tidak masuk commit).
+
+PDF di-render SUNGGUHAN (bukan cuma baca kode) lewat endpoint print asli
+server dev yang jalan (`node dist/main.js`), terhadap data yang benar-benar
+dibuat lewat API (bukan data seed statis) — termasuk kasus yang secara
+khusus menguji perbaikan §11.8 (NPWP pembeli + No. Faktur Pajak 17-digit).
+Empat dari lima template diverifikasi visual (PDF disimpan, dirender ke PNG
+lewat PyMuPDF karena tidak ada `pdftoppm`/ImageMagick di sandbox ini, lalu
+diperiksa langsung):
+
+- **PO** (`GET /purchase-orders/:id/print`) — bersih, kop+NPWP, tabel item,
+  total, blok tanda tangan, tidak ada elemen tumpang tindih.
+- **Faktur Penjualan** (`GET /sales-invoices/:id/print`) — No. Faktur Pajak
+  17-digit dan NPWP pembeli (§11.8) tampil BENAR di posisi yang dimaksud,
+  breakdown DPP/PPN/Total akurat, tidak ada field kosong/salah bind.
+  Faktur uji dibuat khusus dengan `taxInvoiceNo` + `partner.npwp` terisi
+  untuk memaksa kedua field itu benar-benar dirender, bukan cuma ada di skema.
+  Faktur Penjualan yang sudah ada sebelumnya di database (dibuat pass
+  sebelumnya) semuanya `taxInvoiceNo: null`, jadi tidak akan menguji jalur
+  ini kalau tidak dibuat baru.
+- **Slip Gaji** (`GET /payslips/:id/print`) — Pendapatan vs Potongan, Terima
+  Bersih, semua angka cocok persis dengan respons API generate.
+  Instansi verifikasi butuh karyawan baru (tidak ada karyawan tersimpan
+  sebelumnya).
+  Blok penandatangan menampilkan label peran ("Diterbitkan oleh
+  HRD/Keuangan") dengan benar.
+- **BAST** (`GET /basts/:id/print`) — dua blok tanda tangan pihak, tabel
+  baris item, No PO, semuanya bind benar.
+
+**Faktur Pembelian TIDAK diverifikasi visual** — bukan kelalaian: sistem
+ini memang tidak punya template cetak Faktur Pembelian sama sekali (tidak
+ada file di `backend/src/printing/templates/`, tidak ada endpoint
+`.../print` di `PurchaseInvoicesController`), baik sebelum maupun sesudah
+§12.1. §12.1 cuma menutup celah FORM PEMBUATAN di frontend, bukan
+menambah kemampuan cetak baru — di luar cakupan instruksi tugas
+("PDF Faktur Pembelian **kalau sudah ada** dari #1").
+
+Tidak ada defect ditemukan di keempat template yang diverifikasi — tidak
+ada perbaikan kode yang diperlukan untuk item ini.
