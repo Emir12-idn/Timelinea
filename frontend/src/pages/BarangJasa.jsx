@@ -105,6 +105,7 @@ export default function BarangJasa() {
                 <th className="px-4 py-3">Satuan</th>
                 <th className="px-4 py-3">Tipe</th>
                 <th className="px-4 py-3">Costing</th>
+                <th className="px-4 py-3">Barcode</th>
                 <th className="px-4 py-3 text-right">Biaya Terakhir</th>
               </tr>
             </thead>
@@ -119,10 +120,11 @@ export default function BarangJasa() {
                     {COSTING_LABEL[it.costingMethod] ?? it.costingMethod}
                     {it.tracksExpiry && <span className="ml-1 text-[10px] text-amber-600">(FEFO)</span>}
                   </td>
+                  <td className="px-4 py-3 text-slate-500">{it.barcode || "-"}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-slate-700">{it.lastCost ? rupiah(it.lastCost) : "-"}</td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">Belum ada barang/jasa.</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-400">Belum ada barang/jasa.</td></tr>}
             </tbody>
           </table>
         </div>

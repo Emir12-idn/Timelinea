@@ -337,9 +337,11 @@ model Item {
   // kedaluwarsa (bukan cuma FIFO, yang cuma memperhatikan urutan masuk). Item
   // tanpa expiry tracking (mayoritas) tetap FIFO murni seperti semula.
   tracksExpiry  Boolean       @default(false) @map("tracks_expiry")
-  // Barcode fisik (opsional) — field data murni, TIDAK ada integrasi hardware
-  // scanner (di luar cakupan web app ini, lihat laporan akhir tugas ini).
-  barcode       String?
+  // Barcode fisik (opsional, unik — §13 data design) — field data murni, TIDAK
+  // ada integrasi hardware scanner (di luar cakupan web app ini, lihat laporan
+  // akhir tugas ini). @unique membolehkan banyak baris NULL (barang tanpa
+  // barcode) tapi menolak dua barang dengan barcode fisik yang sama persis.
+  barcode       String?       @unique
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
   createdBy     Int?          @map("created_by")
