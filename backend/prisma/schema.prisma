@@ -163,6 +163,26 @@ enum ChequeGiroStatus {
   bounced
 }
 
+// §11 data design, item 3 — transaksi berulang (recurring transactions).
+enum RecurringDocType {
+  sales_invoice
+  purchase_invoice
+}
+
+enum RecurringFrequency {
+  monthly
+  weekly
+}
+
+// Draft yang dihasilkan generateDue() menunggu review manusia — lihat catatan di
+// RecurringTemplate di bawah untuk kenapa ini bukan SalesInvoice/PurchaseInvoice
+// langsung.
+enum RecurringDraftStatus {
+  pending
+  confirmed
+  discarded
+}
+
 // ---------------------------------------------------------------------------
 // Auth / users
 // ---------------------------------------------------------------------------
@@ -1251,4 +1271,55 @@ model ClosedPeriod {
 
   @@unique([companyId, period])
   @@map("closed_periods")
+}
+
+// §11 data design, item 3 — transaksi berulang. Template tersimpan (`payload` =
+// body DTO create sales/purchase invoice APA ADANYA, tanpa `date` — diisi dari
+// `nextRunDate` tiap kali generate) yang di-generate ulang sesuai `frequency`.
+//
+// Kenapa generateDue() TIDAK langsung memanggil SalesInvoicesService.create()/
+// PurchaseInvoicesService.create(): di sistem ini create() SELALU memposting
+// jurnal seketika (baik untuk SalesInvoice MAUPUN PurchaseInvoice — status
+// "draft" pada SalesInvoice cuma label alur kerja/kesiapan cetak, BUKAN "belum
+// diposting"; PurchaseInvoice malah tidak punya status draft sama sekali). Jadi
+// satu-satunya cara jujur memenuhi "generate draft, jangan auto-post — manusia
+// tetap yang mereview & posting" adalah TIDAK memanggil create() sampai manusia
+// menekan confirm — lihat RecurringGeneratedDraft di bawah, dan
+// RecurringTemplatesService.confirmDraft().
+model RecurringTemplate {
+  id          Int                @id @default(autoincrement())
+  name        String
+  type        RecurringDocType
+  payload     Json
+  frequency   RecurringFrequency
+  nextRunDate DateTime           @map("next_run_date")
+  isActive    Boolean            @default(true) @map("is_active")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  createdBy   Int?               @map("created_by")
+  deletedAt   DateTime?          @map("deleted_at")
+
+  drafts RecurringGeneratedDraft[]
+
+  @@map("recurring_templates")
+}
+
+// Satu baris per kejadian generate — TIDAK menyentuh SalesInvoice/PurchaseInvoice
+// atau jurnal sampai di-confirm (lihat catatan di RecurringTemplate). `payload`
+// adalah body DTO siap pakai (date sudah diisi dari templateRunDate) untuk
+// dikirim ke service create() yang sesuai saat confirm.
+model RecurringGeneratedDraft {
+  id              Int                  @id @default(autoincrement())
+  templateId      Int                  @map("template_id")
+  template        RecurringTemplate    @relation(fields: [templateId], references: [id])
+  type            RecurringDocType
+  payload         Json
+  templateRunDate DateTime             @map("template_run_date")
+  status          RecurringDraftStatus @default(pending)
+  confirmedRefId  Int?                 @map("confirmed_ref_id")
+  generatedAt     DateTime             @default(now()) @map("generated_at")
+  confirmedAt     DateTime?            @map("confirmed_at")
+  confirmedBy     Int?                 @map("confirmed_by")
+
+  @@map("recurring_generated_drafts")
 }

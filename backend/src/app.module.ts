@@ -40,6 +40,7 @@ import { BudgetsModule } from "./accounting/budgets/budgets.module";
 import { ProjectBudgetsModule } from "./projectmgmt/project-budgets/project-budgets.module";
 import { ChequeGiroModule } from "./cash/cheque-giro/cheque-giro.module";
 import { ClosedPeriodsModule } from "./accounting/closed-periods/closed-periods.module";
+import { RecurringTemplatesModule } from "./recurring/recurring-templates.module";
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { ClosedPeriodsModule } from "./accounting/closed-periods/closed-periods.
     ProjectBudgetsModule,
     ChequeGiroModule,
     ClosedPeriodsModule,
+    RecurringTemplatesModule,
   ],
 })
 export class AppModule {}
