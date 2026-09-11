@@ -115,8 +115,14 @@ enum AccountType {
   beban
 }
 
+// §11 data design, item 1 — Accurate 5 documents three depreciation methods.
+// straight_line (Garis Lurus) was already implemented; double_declining_balance
+// (Saldo Menurun Ganda) and sum_of_years_digits (Jumlah Angka Tahun) added here.
+// See FixedAssetsService.runDepreciation() for the per-method formulas.
 enum DepreciationMethod {
   straight_line
+  double_declining_balance
+  sum_of_years_digits
 }
 
 enum CashTransactionType {

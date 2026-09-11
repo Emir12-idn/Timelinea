@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsInt, IsOptional, IsPositive, IsString, Min } from "class-validator";
+import { IsDateString, IsEnum, IsInt, IsOptional, IsPositive, IsString, Min } from "class-validator";
+import { DepreciationMethod } from "@prisma/client";
 
 export class CreateFixedAssetDto {
   @IsString()
@@ -25,4 +26,9 @@ export class CreateFixedAssetDto {
   @Type(() => Number)
   @IsInt()
   companyId?: number;
+
+  /** Metode penyusutan — §11 data design, item 1. Default straight_line kalau kosong. */
+  @IsOptional()
+  @IsEnum(DepreciationMethod)
+  method?: DepreciationMethod;
 }
